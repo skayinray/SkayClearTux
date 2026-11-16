@@ -90,6 +90,9 @@ jobs:
   # ------------------------------------------------------------------ macOS
   macos:
     runs-on: macos-latest
+    # macOS-раннеры иногда долго не выделяются — не блокируем ими релиз
+    continue-on-error: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -119,7 +122,9 @@ jobs:
 
   # ---------------------------------------------------- Release + latest.json
   release:
-    needs: [linux, windows, macos]
+    # релиз публикуется сразу после Linux и Windows;
+    # macOS добавляется отдельным job'ом, когда соберётся
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,5 +171,40 @@ jobs:
           files: |
             artifacts/linux-appimage/*
             artifacts/windows/*
-            artifacts/macos/*
             latest.json
+
+  # ------------------------- macOS добавляется к релизу, когда соберётся
+  macos-release:
+    needs: [macos, release]
+    # запускаем, если релиз уже опубликован; наличие .dmg проверяем по файлам
+    if: ${{ always() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Параметры релиза
+        id: meta
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="${REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: macos
+          path: artifacts
+
+      - name: Добавить .dmg в релиз
+        if: ${{ hashFiles('artifacts/**') != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          files: artifacts/*.dmg

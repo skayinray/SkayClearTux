@@ -124,29 +124,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # определяем тег и версию: при пуше тега v* — сам тег,
+      # при ручном запуске — v<введённая версия>
+      - name: Параметры релиза
+        id: meta
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="${REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Версия: $VERSION, тег: v$VERSION"
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
       - name: Собрать latest.json
         env:
-          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
           ls -R artifacts
           APPIMAGE=$(find artifacts -name "SkayClearTux-*-x86_64.AppImage" | head -n1)
           export SHA256=$(sha256sum "$APPIMAGE" | cut -d' ' -f1)
           export FNAME=$(basename "$APPIMAGE")
-          export VERSION="${VERSION#v}"
           python -c "import json,os,datetime; v=os.environ['VERSION']; d={'version':v,'url':f\"https://github.com/{os.environ['REPO']}/releases/download/v{v}/{os.environ['FNAME']}\",'sha256':os.environ['SHA256'],'notes':f'SkayClearTux {v}','published':datetime.date.today().isoformat()}; print(json.dumps(d,ensure_ascii=False,indent=2))" > latest.json
           cat latest.json
 
       - name: Публикация релиза
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: SkayClearTux ${{ github.ref_name }}
-          generate_release_notes: true
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: SkayClearTux ${{ steps.meta.outputs.version }}
+          body_path: RELEASE_NOTES.md
           files: |
             artifacts/linux-appimage/*
             artifacts/windows/*

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec.bak
+
+# Виртуальные окружения
+.venv/
+.venv-*/
+venv/
+env/
+
+# PyInstaller / AppImage
+*.AppImage
+SkayClearTux.AppDir/
+appimagetool-*
+
+# Иконки, генерируемые при сборке
+skaycleartux/assets/tux.ico
+skaycleartux/assets/tux.icns
+skaycleartux/assets/tux.iconset/
+
+# Редакторы и ОС
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Локальные данные
+latest.json

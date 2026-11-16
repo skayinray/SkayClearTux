@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SkayClearTux
+GenericName=Системный помощник
+Comment=Очистка, монитор, процессы, службы, пакеты, обновления, сеть, порты, железо, диски, журнал, файрвол, твики, хэши, бэкап, темы и шахматы с ботом и рейтингом Эло
+Exec=SkayClearTux.AppImage
+Icon=skaycleartux
+Terminal=false
+Categories=Utility;System;Game;
+Keywords=cleaner;system;chess;themes;tux;
+StartupNotify=true

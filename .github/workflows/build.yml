@@ -1,0 +1,154 @@
+name: build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия без префикса v (например 1.2.0)"
+        required: true
+        default: "1.2.0"
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: SkayClearTux
+
+jobs:
+  # ------------------------------------------------------------------ Linux
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+          python -m pip install --upgrade pip
+          python -m pip install PySide6 pyinstaller
+
+      - name: Сборка бандла
+        run: |
+          pyinstaller --noconfirm --clean --windowed \
+            --name "${APP_NAME}" \
+            --add-data "skaycleartux/assets:skaycleartux/assets" \
+            --icon skaycleartux/assets/tux.png \
+            --exclude-module tkinter SkayClearTux.py
+
+      - name: Сборка AppImage
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          export VERSION="${VERSION#v}"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          bash packaging/01-linux/make_appimage.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: build/SkayClearTux-*-x86_64.AppImage
+
+  # ---------------------------------------------------------------- Windows
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PySide6 pyinstaller pillow
+
+      - name: Иконка и сборка
+        shell: pwsh
+        run: |
+          python -c "from PIL import Image; Image.open('skaycleartux/assets/tux.png').save('skaycleartux/assets/tux.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+          Copy-Item -Force "packaging/02-windows/SkayClearTux.spec" "SkayClearTux.spec"
+          pyinstaller --noconfirm --clean SkayClearTux.spec
+
+      - name: Архив
+        shell: pwsh
+        run: Compress-Archive -Path dist/SkayClearTux -DestinationPath "SkayClearTux-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: SkayClearTux-windows.zip
+
+  # ------------------------------------------------------------------ macOS
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install PySide6 pyinstaller pillow
+
+      - name: Иконка и сборка
+        run: |
+          mkdir -p skaycleartux/assets/tux.iconset
+          python -c "from PIL import Image; src=Image.open('skaycleartux/assets/tux.png').convert('RGBA'); [src.resize((s,s),Image.LANCZOS).save(f'skaycleartux/assets/tux.iconset/icon_{s}x{s}.png') for s in (16,32,64,128,256,512,1024)]; [src.resize((s*2,s*2),Image.LANCZOS).save(f'skaycleartux/assets/tux.iconset/icon_{s}x{s}@2x.png') for s in (16,32,64,128,256,512,1024)]"
+          iconutil -c icns skaycleartux/assets/tux.iconset -o skaycleartux/assets/tux.icns
+          cp packaging/03-macos/SkayClearTux-macos.spec SkayClearTux-macos.spec
+          pyinstaller --noconfirm --clean SkayClearTux-macos.spec
+          hdiutil create -volname "SkayClearTux" -srcfolder dist/SkayClearTux.app \
+            -ov -format UDZO dist/SkayClearTux.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/SkayClearTux.dmg
+
+  # ---------------------------------------------------- Release + latest.json
+  release:
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Собрать latest.json
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          ls -R artifacts
+          APPIMAGE=$(find artifacts -name "SkayClearTux-*-x86_64.AppImage" | head -n1)
+          export SHA256=$(sha256sum "$APPIMAGE" | cut -d' ' -f1)
+          export FNAME=$(basename "$APPIMAGE")
+          export VERSION="${VERSION#v}"
+          python -c "import json,os,datetime; v=os.environ['VERSION']; d={'version':v,'url':f\"https://github.com/{os.environ['REPO']}/releases/download/v{v}/{os.environ['FNAME']}\",'sha256':os.environ['SHA256'],'notes':f'SkayClearTux {v}','published':datetime.date.today().isoformat()}; print(json.dumps(d,ensure_ascii=False,indent=2))" > latest.json
+          cat latest.json
+
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: SkayClearTux ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/linux-appimage/*
+            artifacts/windows/*
+            artifacts/macos/*
+            latest.json

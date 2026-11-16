@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Скруглённая подложка -->
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="#0f1117"/>
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="url(#glow)"/>
+
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="32%" r="70%">
+      <stop offset="0%" stop-color="#1f2430"/>
+      <stop offset="100%" stop-color="#0f1117"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ласты -->
+  <ellipse cx="122" cy="252" rx="34" ry="92" fill="#0b0d12"/>
+  <ellipse cx="390" cy="252" rx="34" ry="92" fill="#0b0d12"/>
+
+  <!-- Лапы -->
+  <ellipse cx="196" cy="430" rx="60" ry="27" fill="#F5A623"/>
+  <ellipse cx="316" cy="430" rx="60" ry="27" fill="#F5A623"/>
+
+  <!-- Тело -->
+  <path d="M256 34
+           C154 34 98 124 98 226
+           C98 336 150 436 256 436
+           C362 436 414 336 414 226
+           C414 124 358 34 256 34 Z" fill="#0b0d12"/>
+
+  <!-- Живот -->
+  <ellipse cx="256" cy="312" rx="118" ry="112" fill="#ffffff"/>
+
+  <!-- Глаза -->
+  <ellipse cx="211" cy="152" rx="49" ry="60" fill="#ffffff"/>
+  <ellipse cx="301" cy="152" rx="49" ry="60" fill="#ffffff"/>
+  <circle cx="225" cy="162" r="16" fill="#0b0d12"/>
+  <circle cx="287" cy="162" r="16" fill="#0b0d12"/>
+
+  <!-- Клюв -->
+  <ellipse cx="256" cy="206" rx="34" ry="21" fill="#F5A623"/>
+</svg>

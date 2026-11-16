@@ -51,7 +51,8 @@ Icon=skaycleartux
 Terminal=false
 Categories=Utility;System;Game;
 Keywords=cleaner;system;chess;themes;tux;
-Version=$VER
+Version=1.0
+X-AppVersion=$VER
 EOF
 
 cp "$ROOT/skaycleartux/assets/tux.png" "$APPDIR/skaycleartux.png"

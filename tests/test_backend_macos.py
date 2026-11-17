@@ -158,6 +158,7 @@ def test_system_update(backend, monkeypatch, fake_run):
     assert ok and out == "upgraded"
 
 
+@pytest.mark.skipif("sys.platform == 'win32'", reason='Mac only')
 def test_network_info(backend, monkeypatch, fake_run):
     ifconfig = (
         "en0: flags=8863<UP,BROADCAST> mtu 1500\n"

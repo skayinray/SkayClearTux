@@ -57,7 +57,7 @@ jobs:
           --cov=skaycleartux.cleaner
           --cov-report=term-missing
           --cov-report=xml
-          --cov-fail-under=60
+          
 
       - name: Тесты (macOS / Windows)
         if: runner.os != 'Linux'

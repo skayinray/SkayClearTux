@@ -9,7 +9,7 @@ description = "Кроссплатформенный системный помо�
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "SkayClearTux", email = "t.me/imneedasleep" }]
+authors = [{ name = "skayinray", email = "officialidea78@gmail.com" }]
 keywords = ["system", "cleaner", "monitor", "linux", "macos", "windows", "pyside6", "qt"]
 classifiers = [
     "Development Status :: 4 - Beta",

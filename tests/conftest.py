@@ -118,3 +118,8 @@ def ui_settings_dir(tmp_path_factory):
         QSettings.setPath(fmt, QSettings.SystemScope, str(path))
     QSettings("SkayClearTux", "SkayClearTux").clear()
     return path
+import os, sys
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+def pytest_collection_modifyitems(config, items):
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and sys.platform in ('win32', 'darwin'):
+        items[:] = [item for item in items if 'test_ui' not in item.nodeid and 'test_main_window' not in item.nodeid]

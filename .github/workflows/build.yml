@@ -1,12 +1,11 @@
 name: build
+permissions:
+  contents: write
 
 on:
   push:
     tags:
       - 'v*'
-
-permissions:
-  contents: write
 
 jobs:
   release:
@@ -56,7 +55,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean packaging/02-windows/SkayClearTux.spec
+          pyinstaller --noconfirm --onedir --windowed --name="SkayClearTux" --add-data "skaycleartux/assets;skaycleartux/assets" SkayClearTux.py
           Compress-Archive -Path dist/SkayClearTux/* -DestinationPath dist/SkayClearTux-windows.zip
           New-Item -ItemType Directory -Force -Path artifacts
           Copy-Item dist/SkayClearTux-windows.zip -Destination artifacts/

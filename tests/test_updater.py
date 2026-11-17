@@ -1,3 +1,4 @@
+import sys
 """Юнит-тесты дистанционных обновлений (``skaycleartux.updater``).
 
 Сеть не используется: ``urllib.request.urlopen`` и ``subprocess.Popen``
@@ -229,6 +230,7 @@ def test_install_appimage_rejects_directory(tmp_path):
 # --------------------------------------------------------------------------- #
 #  Установка
 # --------------------------------------------------------------------------- #
+@pytest.mark.skipif(sys.platform == "win32", reason="No AppImage on Windows")
 def test_install_appimage_replaces_target(tmp_path):
     downloaded = tmp_path / "new.AppImage"
     downloaded.write_bytes(b"new")

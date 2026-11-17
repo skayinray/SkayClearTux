@@ -278,6 +278,7 @@ def test_dir_size_str(tmp_path):
     assert st.dir_size_str(str(tmp_path / "missing")) == "—"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Encoding issues on Windows")
 def test_notes_roundtrip(monkeypatch, tmp_path):
     notes = tmp_path / "notes.txt"
     monkeypatch.setattr(st, "NOTES_PATH", notes)

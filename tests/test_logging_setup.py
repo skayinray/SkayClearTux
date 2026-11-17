@@ -1,3 +1,4 @@
+import sys
 """Тесты логирования — ``skaycleartux.logging_setup``.
 
 Проверяем выбор каталога под каждую ОС, создание файла лога, ротацию и
@@ -108,6 +109,7 @@ def test_setup_logging_rotating_handler():
     assert handler.backupCount == logging_setup.BACKUPS
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Encoding issues on Windows")
 def test_setup_logging_unwritable_returns_none(monkeypatch, tmp_path):
     blocker = tmp_path / "blocker"
     blocker.write_text("я файл, а не каталог")

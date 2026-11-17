@@ -1,3 +1,4 @@
+import sys
 """Юнит-тесты Linux-бэкенда (``skaycleartux.backends.linux``).
 
 Все вызовы подпроцессов подменяются, файлы /proc и /sys — тоже, поэтому
@@ -40,6 +41,7 @@ def common_result(stdout="", returncode=0, cmd=None):
 # --------------------------------------------------------------------------- #
 #  Процессы
 # --------------------------------------------------------------------------- #
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix only")
 def test_kill_process_ok(backend, monkeypatch):
     monkeypatch.setattr(linux.os, "kill", lambda pid, sig: None)
     ok, msg = backend.kill_process(42, force=True)
@@ -149,6 +151,7 @@ def test_package_methods_delegate(backend, monkeypatch):
 # --------------------------------------------------------------------------- #
 #  Сеть
 # --------------------------------------------------------------------------- #
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix only")
 def test_network_info(backend, monkeypatch, fake_run):
     def handler(cmd, **kwargs):
         if cmd[:3] == ["ip", "-brief", "addr"]:

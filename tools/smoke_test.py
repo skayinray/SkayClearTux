@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import os
-import sys, os; os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+import sys; os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,7 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PySide6.QtWidgets import (QApplication, QTableWidget)
 
 from skaycleartux import cleaner  # noqa: E402
-from skaycleartux import sys, os; os.environ['QT_QPA_PLATFORM'] = 'offscreen'tem_tools as st  # noqa: E402
+import os
+import sys
+from skaycleartux import system_tools as st  # noqa: E402
 from skaycleartux.backends import common  # noqa: E402
 from skaycleartux.main_window import NAV, MainWindow  # noqa: E402
 from skaycleartux.palette import CommandPalette  # noqa: E402

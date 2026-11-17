@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Вопрос или идея для обсуждения
+    url: https://github.com/skayinray/SkayClearTux/discussions
+    about: Задайте вопрос, поделитесь опытом или обсудите идею в GitHub Discussions
+  - name: Правила участия
+    url: https://github.com/skayinray/SkayClearTux/blob/main/CONTRIBUTING.md
+    about: Как сообщить об ошибке, предложить идею и прислать изменения
+  - name: Сообщить об уязвимости
+    url: https://github.com/skayinray/SkayClearTux/blob/main/SECURITY.md
+    about: Не создавайте публичный Issue — напишите по контакту из SECURITY.md

@@ -32,6 +32,15 @@ def family() -> str:
 
 FAMILY = family()
 
+
+def _log():
+    """Логгер бэкендов (настраивается в ``skaycleartux.logging_setup``).
+
+    Импорт ленивый, чтобы не создавать цикл между ``common`` и ``logging_setup``.
+    """
+    from ..logging_setup import get_logger
+    return get_logger("backends.common")
+
 # Человекочитаемое имя системы, например «Arch Linux», «macOS 15», «Windows 11»
 def os_pretty_name() -> str:
     if FAMILY == "linux":
@@ -108,7 +117,11 @@ def run(cmd: list[str], root: bool = False, timeout: float | None = None,
             cmd, text=True, env=env, cwd=cwd, timeout=timeout,
             input=input_text,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        _log().warning("таймаут команды (%s с): %s", timeout, cmd)
+        return subprocess.CompletedProcess(cmd, 127, "", "")
+    except (FileNotFoundError, OSError) as e:
+        _log().warning("не удалось запустить %s: %s", cmd, e)
         return subprocess.CompletedProcess(cmd, 127, "", "")
 
 

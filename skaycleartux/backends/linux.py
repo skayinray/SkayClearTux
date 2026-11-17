@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import urllib.parse
@@ -471,10 +472,23 @@ class LinuxBackend(BaseBackend):
         return raw.split() if raw else []
 
     def set_cpu_governor(self, governor: str) -> bool:
-        cmd = ["sh", "-c",
-               "for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; "
-               f"do echo {governor} > $f; done"]
-        return common.run(cmd, root=True).returncode == 0
+        # Значение приходит из интерфейса — жёстко валидируем, чтобы исключить
+        # любую инъекцию в команду, и пишем без shell (см. common.run).
+        gov = str(governor).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", gov):
+            return False
+        available = self.cpu_governors()
+        if available and gov not in available:
+            return False
+        paths = sorted(Path("/sys/devices/system/cpu").glob(
+            "cpu*/cpufreq/scaling_governor"))
+        if not paths:
+            return False
+        ok = True
+        for path in paths:
+            r = common.run(["tee", str(path)], root=True, input_text=gov + "\n")
+            ok = ok and r.returncode == 0
+        return ok
 
     def thp_status(self) -> str:
         return common.read_text("/sys/kernel/mm/transparent_hugepage/enabled") or "—"

@@ -74,7 +74,7 @@ class DiscordIPC:
         while len(buf) < count:
             try:
                 chunk = self.sock.recv(count - len(buf))
-            except (socket.timeout, TimeoutError):
+            except TimeoutError:
                 return None
             except OSError:
                 return None

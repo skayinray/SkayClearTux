@@ -27,12 +27,16 @@ import re
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from . import __version__
 
 USER_AGENT = f"SkayClearTux/{__version__}"
+
+# Обновления загружаются только по HTTPS — это защищает от подмены по пути.
+ALLOWED_SCHEMES = ("https",)
 
 
 # --------------------------------------------------------------------------- #
@@ -51,16 +55,57 @@ def is_newer(remote: str, current: str = __version__) -> bool:
     return r > c
 
 
+def _validate_url(url: str, what: str = "адрес") -> str:
+    """Проверяет, что адрес непустой и использует HTTPS.
+
+    Возвращает очищенный адрес. Бросает ``ValueError`` для пустых и
+    небезопасных схем (http, ftp, file и т. п.).
+    """
+    value = (url or "").strip()
+    if not value:
+        raise ValueError(f"не задан {what}")
+    parts = urllib.parse.urlsplit(value)
+    if parts.scheme.lower() not in ALLOWED_SCHEMES:
+        raise ValueError(f"{what} должен использовать HTTPS: {value!r}")
+    if not parts.netloc:
+        raise ValueError(f"{what} указан неверно: {value!r}")
+    return value
+
+
+def _final_url(resp, requested: str) -> str:
+    """Конечный адрес ответа (учитывает редиректы), если доступен."""
+    getter = getattr(resp, "geturl", None)
+    try:
+        return str(getter()) if callable(getter) else requested
+    except Exception:  # noqa: BLE001
+        return requested
+
+
+def safe_filename(name: str) -> str:
+    """Превращает произвольную строку в безопасное имя файла.
+
+    Отбрасывает каталоги и ``..``, поэтому адрес вида
+    ``https://host/../../etc/passwd`` не превратится в путь вне каталога
+    загрузок.
+    """
+    base = str(name or "").replace("\\", "/").split("/")[-1].strip()
+    if not base or base in (".", "..") or base.startswith("."):
+        return "SkayClearTux.AppImage"
+    return base
+
+
 def fetch_manifest(url: str, timeout: float = 12.0) -> dict:
-    if not url or not url.strip():
-        raise ValueError("не задан адрес манифеста обновлений")
-    req = urllib.request.Request(url.strip(), headers={"User-Agent": USER_AGENT})
+    url = _validate_url(url, what="адрес манифеста обновлений")
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
+        if not _final_url(resp, url).lower().startswith("https://"):
+            raise ValueError("манифест получен не по HTTPS")
         raw = resp.read().decode("utf-8", errors="replace")
     data = json.loads(raw)
     if not isinstance(data, dict) or "version" not in data:
         raise ValueError("манифест повреждён: нет поля version")
     return data
+
 
 
 def appimage_path() -> str | None:
@@ -73,10 +118,17 @@ def appimage_path() -> str | None:
 
 def download(url: str, dest: Path, expected_sha256: str = "",
              progress=None) -> Path:
-    """Скачивает файл в dest, при необходимости проверяет sha256."""
+    """Скачивает файл в dest, при необходимости проверяет sha256.
+
+    Принимает только HTTPS-адреса и убеждается, что и после редиректов
+    соединение осталось защищённым.
+    """
+    url = _validate_url(url, what="адрес файла обновления")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     hasher = hashlib.sha256()
     with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as fh:
+        if not _final_url(resp, url).lower().startswith("https://"):
+            raise ValueError("файл получен не по HTTPS")
         total = int(resp.headers.get("Content-Length") or 0)
         done = 0
         while True:
@@ -103,6 +155,8 @@ def download(url: str, dest: Path, expected_sha256: str = "",
 def install_appimage(downloaded: Path, target: str) -> None:
     """Заменяет текущий AppImage новым (атомарно) и делает его исполняемым."""
     target_path = Path(target)
+    if target_path.is_dir():
+        raise ValueError("цель обновления — каталог, а не файл")
     os.chmod(downloaded, 0o755)
     try:
         os.replace(downloaded, target_path)
@@ -125,7 +179,8 @@ def restart(target: str) -> None:
 
 
 def temp_download_path(filename: str) -> Path:
-    suffix = Path(filename).suffix or ".AppImage"
+    base = safe_filename(filename)
+    suffix = Path(base).suffix or ".AppImage"
     fd, name = tempfile.mkstemp(prefix="skaycleartux-update-", suffix=suffix)
     os.close(fd)
     return Path(name)

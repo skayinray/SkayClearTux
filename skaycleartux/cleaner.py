@@ -266,7 +266,6 @@ def _macos_categories() -> list[Category]:
 # =========================================================================== #
 def _windows_categories() -> list[Category]:
     local = Path(os.environ.get("LOCALAPPDATA", str(HOME / "AppData" / "Local")))
-    roaming = Path(os.environ.get("APPDATA", str(HOME / "AppData" / "Roaming")))
     temp = Path(os.environ.get("TEMP", str(local / "Temp")))
 
     def scan_temp():

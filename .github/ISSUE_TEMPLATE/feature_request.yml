@@ -1,0 +1,50 @@
+name: Предложение функции
+description: Идея, как сделать SkayClearTux лучше
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за идею! Опишите задачу, а не только решение — так проще понять,
+        что именно вам нужно.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Я поискал похожие Issues и не нашёл дубликат
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу это решает
+      description: Что вам неудобно или чего не хватает сейчас
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как вы это видите. Необязательно описывать реализацию
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Что ещё пробовали или рассматривали
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: Для какой ОС это важно
+      options:
+        - Все платформы
+        - Linux
+        - macOS
+        - Windows
+        - Не знаю
+    validations:
+      required: false

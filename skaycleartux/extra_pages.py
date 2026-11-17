@@ -21,7 +21,7 @@ from . import system_tools as st
 from .cleaner import human
 from .helptext import help_for
 from .pages import SystemInfo, Worker
-from .themes import shade
+from .ui_utils import mark_available, mark_unavailable
 
 MONO = QFont("DejaVu Sans Mono")
 
@@ -614,6 +614,7 @@ class TweaksPage(QWidget):
         l1.addWidget(self.swap)
         b1 = QPushButton("Применить")
         b1.clicked.connect(self._apply_swappiness)
+        self.btn_swap = b1
         l1.addWidget(b1)
         l1.addStretch(1)
         self.lbl_swap = QLabel("")
@@ -629,6 +630,7 @@ class TweaksPage(QWidget):
         l2.addWidget(self.gov)
         b2 = QPushButton("Применить")
         b2.clicked.connect(self._apply_governor)
+        self.btn_gov = b2
         l2.addWidget(b2)
         l2.addStretch(1)
         self.lbl_gov = QLabel("")
@@ -666,6 +668,13 @@ class TweaksPage(QWidget):
         self.gov.clear()
         self.gov.addItems(govs or [st.cpu_governor()])
         self.lbl_gov.setText(f"сейчас: {st.cpu_governor()}")
+        # на некоторых системах список режимов пуст — менять нечего
+        if govs:
+            mark_available(self.gov)
+            mark_available(self.btn_gov)
+        else:
+            mark_unavailable(self.gov)
+            mark_unavailable(self.btn_gov)
         self.lbl_state.setText(
             f"<b>Transparent Huge Pages:</b> {st.thp_status()}<br>"
             f"<b>zram / swap:</b> {st.zram_status()}")
@@ -1025,6 +1034,13 @@ class ModulesPage(QWidget):
                 self.table.setItem(r, c, _cell(text))
         self._apply_filter(self.filter.text())
         self.status.setText(f"Модулей: {len(self._rows)}")
+        # модули ядра есть только на Linux; иначе функции недоступны
+        if self._rows:
+            for w in (self.name_input, self.btn_load, self.btn_unload):
+                mark_available(w)
+        else:
+            for w in (self.name_input, self.btn_load, self.btn_unload):
+                mark_unavailable(w)
 
     def _apply_filter(self, text: str) -> None:
         needle = text.strip().lower()

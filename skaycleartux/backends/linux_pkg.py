@@ -550,7 +550,7 @@ class ZypperPkg(PkgManager):
                 continue
             if len(cells) != len(header):
                 continue
-            rows.append(dict(zip(header, cells)))
+            rows.append(dict(zip(header, cells, strict=False)))
         return rows
 
     def search(self, query: str) -> list[dict]:

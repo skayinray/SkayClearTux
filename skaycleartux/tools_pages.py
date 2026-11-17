@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFrame, QHBoxLayout
                                QVBoxLayout, QWidget)
 
 from . import system_tools as st
-from .cleaner import human
 from .pages import Worker
 
 

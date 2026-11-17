@@ -21,6 +21,7 @@ DEFAULTS: dict[str, object] = {
     "ui/close_to_tray": False,   # закрывать окно в трей, а не выходить
     "ui/hotkeys": True,          # глобальные горячие клавиши внутри окна
     "ui/tray_hint_shown": False, # одноразовая подсказка про трей
+    "ui/macos_hint_shown": False,# одноразовая подсказка про Gatekeeper (macOS)
     # шахматы
     "chess/difficulty": "Средне",
     "chess/side": "Белые",

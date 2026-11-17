@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  check:
+  test:
     name: ${{ matrix.os }} · Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -20,20 +20,58 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
 
       - name: Зависимости
         run: |
           python -m pip install --upgrade pip
-          python -m pip install PySide6
+          python -m pip install -e ".[dev]"
+
+      - name: Линтер (ruff)
+        run: python -m ruff check skaycleartux tests tools
+
+      - name: Формат (black) — мягкий режим
+        continue-on-error: true
+        run: python -m black --check skaycleartux tests tools
+
+      - name: Типы (mypy) — мягкий режим
+        continue-on-error: true
+        run: python -m mypy
 
       - name: Проверка синтаксиса
-        run: python -m compileall -q skaycleartux SkayClearTux.py
+        run: python -m compileall -q skaycleartux SkayClearTux.py tools tests
 
       - name: Тест менеджеров пакетов Linux
         run: python tools/pkg_check.py
 
       - name: Импорт бэкенда текущей ОС
         run: python -c "from skaycleartux.backends import get_backend; b=get_backend(); print(b.name, b.display)"
+
+      - name: Тесты (Linux, с покрытием)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          python -m pytest -q
+          --cov=skaycleartux.backends
+          --cov=skaycleartux.cleaner
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=60
+
+      - name: Тесты (macOS / Windows)
+        if: runner.os != 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+      - name: Загрузить отчёт покрытия
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
 
       - name: Дымовой тест интерфейса (offscreen)
         env:

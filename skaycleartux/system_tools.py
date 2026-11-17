@@ -14,7 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from .backends import common, get_backend
-from .backends.common import (ALGOS, dir_size, hash_file, hash_text, human,
+# часть имён реэкспортируется для обратной совместимости со старым кодом
+from .backends.common import (ALGOS, dir_size, hash_file, hash_text, human,  # noqa: F401
                               text_transform, verify_hash)
 
 BACKEND = get_backend()

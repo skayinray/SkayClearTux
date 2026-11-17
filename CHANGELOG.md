@@ -3,6 +3,48 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — по [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+Укрепление проекта: тесты и CI, документация, безопасность, устойчивость и
+сообщество.
+
+### Добавлено
+- **Тесты.** `pytest` + `pytest-qt` + `pytest-cov` в `[project.optional-dependencies].dev`;
+  юнит-тесты бэкендов, `cleaner.py`, `system_tools.py`, `updater.py` и UI-тесты
+  (`tests/`). Покрытие `backends/` и `cleaner.py` — 78% при пороге 60%.
+- **CI.** Шаг тестов на Linux с отчётом покрытия (порог 60%) и загрузкой
+  `coverage.xml`, блокирующий `ruff`, мягкие `black`/`mypy`, `compileall`,
+  `tools/pkg_check.py` и `tools/smoke_test.py`; в сборке релизов добавлена
+  проверка синтаксиса и дымовой тест.
+- **Сообщество.** Шаблоны Issue (`bug_report.yml`, `feature_request.yml`) и Pull
+  Request, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, ссылки на GitHub Discussions.
+- **Документация разработчика.** `docs/architecture.md` и `docs/backends.md`;
+  docstring'и публичных классов и функций.
+- **macOS.** Инструкция «Первый запуск на macOS», скрипт ad-hoc подписи и
+  нотаризации `packaging/03-macos/sign-and-notarize.sh` и `entitlements.plist`;
+  разовая подсказка про Gatekeeper при первом старте.
+- **Логирование.** `skaycleartux/logging_setup.py` — ошибки бэкендов и
+  необработанные исключения пишутся в файл лога в стандартном каталоге ОС с
+  ротацией (512 КБ × 3).
+- **Пометка недоступных функций.** `skaycleartux/ui_utils.py`
+  (`mark_unavailable` / `mark_available`); применено к разделам «Модули ядра» и
+  «Твики».
+
+### Безопасность
+- Обновления принимаются **только по HTTPS**; после редиректов проверяется, что
+  итоговый адрес остался `https://`.
+- Имя файла обновления санитизируется (`safe_filename`), защита от path traversal.
+- `install_appimage` отказывается работать, если цель — каталог.
+- Все внешние команды — списком аргументов, без `shell=True`, с таймаутом.
+- Добавлена модель угроз в [SECURITY.md](SECURITY.md) и тесты на враждебный ввод.
+
+### Исправлено
+- `backends/base.py`: добавлен пропущенный `import os` (`load_avg`).
+- `cleaner.py`: удалена неиспользуемая переменная.
+- `discord_rpc.py`: современный `except TimeoutError`.
+- Удалены мёртвые импорты в `pages.py`, `extra_pages.py`, `tools_pages.py`,
+  `palette.py`.
+
 ## [1.3.0] — 2026-11-16
 
 Linux-часть больше не привязана к Arch: пакеты, обновления и очистка работают

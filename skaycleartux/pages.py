@@ -3,16 +3,13 @@ from __future__ import annotations
 
 import os
 import platform
-import shutil
-import subprocess
-import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QMessageBox, QProgressBar, QPushButton,
-                               QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
+                               QScrollArea, QVBoxLayout, QWidget)
 
 from . import cleaner
 from . import system_tools as st

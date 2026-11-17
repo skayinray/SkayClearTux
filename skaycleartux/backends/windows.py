@@ -91,7 +91,7 @@ def _winget_parse(text: str) -> list[dict]:
             continue
         if len(cells) < 2:
             continue
-        rows.append(dict(zip(header, cells)))
+        rows.append(dict(zip(header, cells, strict=False)))
     return rows
 
 
@@ -115,7 +115,8 @@ def _parse_ipconfig(text: str) -> dict:
                 cur = None
             header = line.rstrip(":").strip()
             low = header.lower()
-            if "ip configuration" in low or "конфигурация ip" in low:
+            if "ip configuration" in low or "конфигурация ip" in low \
+                    or "настройка протокола ip" in low:
                 continue
             cur = {"name": header, "state": "up", "addrs": [], "mac": ""}
             last_key = ""

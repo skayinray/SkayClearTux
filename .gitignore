@@ -34,3 +34,12 @@ desktop.ini
 
 # Локальные данные
 latest.json
+
+# Тесты и линтеры
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

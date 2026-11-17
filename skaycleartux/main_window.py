@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
         self._setup_tray()
         self._setup_presence()
         self._maybe_auto_check_updates()
+        self._maybe_macos_hint()
 
     # -------------------------------------------------------------- страницы
     def _create_pages(self) -> None:
@@ -520,6 +521,24 @@ class MainWindow(QMainWindow):
         if url and self.settings.get_bool("update/auto_check"):
             QTimer.singleShot(2500, lambda: self.check_updates(silent=True))
 
+    def _maybe_macos_hint(self) -> None:
+        """Одноразовая подсказка про Gatekeeper при первом запуске на macOS."""
+        if platform_common.FAMILY != "macos":
+            return
+        if self.settings.get_bool("ui/macos_hint_shown"):
+            return
+        self.settings.set("ui/macos_hint_shown", True)
+        self.settings.save()
+
+        def show():
+            QMessageBox.information(
+                self, "Первый запуск",
+                "Если macOS не открывает приложение сразу:\n"
+                "щёлкните по нему правой кнопкой → «Открыть» → «Открыть».\n\n"
+                "Подробнее — в разделе «Первый запуск на macOS» в README.")
+
+        QTimer.singleShot(1500, show)
+
     def check_updates(self, silent: bool = False) -> None:
         if self._update_busy:
             return
@@ -582,7 +601,7 @@ class MainWindow(QMainWindow):
             return
 
         target = updater.appimage_path()
-        filename = url.split("/")[-1] or "SkayClearTux.AppImage"
+        filename = updater.safe_filename(url)
         if not target:
             downloads = Path.home() / "Загрузки"
             if not downloads.is_dir():

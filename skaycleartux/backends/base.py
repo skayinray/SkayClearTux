@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from . import common
 
 NOT_AVAILABLE = "На этой системе функция недоступна."
@@ -91,7 +93,7 @@ class BaseBackend:
 
     def load_avg(self) -> tuple[float, float, float]:
         try:
-            return tuple(os.getloadavg())  # type: ignore[name-defined]
+            return tuple(os.getloadavg())  # type: ignore[return-value]
         except Exception:  # noqa: BLE001
             return 0.0, 0.0, 0.0
 

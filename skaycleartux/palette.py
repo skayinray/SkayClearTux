@@ -10,7 +10,6 @@ Enter — переход, Esc — закрыть.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (QDialog, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QVBoxLayout)
 
@@ -69,7 +68,7 @@ class CommandPalette(QDialog):
         self.list.setMinimumHeight(320)
         lay.addWidget(self.list, 1)
 
-        hint = QLabel("↑ ↓ — выбор · Enter — открыть · Esc — закрыть")
+        hint = QLabel("Стрелки — выбор · Enter — открыть · Esc — закрыть")
         hint.setObjectName("CardSub")
         lay.addWidget(hint)
 

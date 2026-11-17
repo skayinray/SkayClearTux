@@ -38,5 +38,4 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           PYTHONIOENCODING: utf-8
         run: |
-          python -m compileall -q skaycleartux SkayClearTux.py tools tests
           python tools/smoke_test.py

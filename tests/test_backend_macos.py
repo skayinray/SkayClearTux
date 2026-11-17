@@ -8,7 +8,6 @@ from __future__ import annotations
 import subprocess
 
 import pytest
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Mac-only tests")
 
 from skaycleartux.backends import macos
 from skaycleartux.backends.macos import MacOSBackend, _plist_label

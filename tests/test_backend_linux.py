@@ -10,7 +10,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Linux-only tests")
 
 from skaycleartux.backends import linux, linux_pkg
 from skaycleartux.backends.linux import LinuxBackend, _parse_desktop

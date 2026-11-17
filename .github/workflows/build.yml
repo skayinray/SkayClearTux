@@ -31,7 +31,7 @@ jobs:
       - name: Зависимости
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2
+          sudo apt-get install -y libfuse2 libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
           python -m pip install --upgrade pip
           python -m pip install PySide6 pyinstaller
 
@@ -76,7 +76,7 @@ jobs:
       - name: Зависимости
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm
+          sudo apt-get install -y rpm libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
           python -m pip install --upgrade pip
           python -m pip install PySide6 pyinstaller
 

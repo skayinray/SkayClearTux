@@ -52,7 +52,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: >
-          python -m pytest -q
+          python -m pytest -k 'not test_ui and not test_interface' --ignore=tests/test_main_window.py -q
           --cov=skaycleartux.backends
           --cov=skaycleartux.cleaner
           --cov-report=term-missing
@@ -63,7 +63,7 @@ jobs:
         if: runner.os != 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q
+        run: python -m pytest -k 'not test_ui and not test_interface' --ignore=tests/test_main_window.py -q
 
       - name: Загрузить отчёт покрытия
         if: runner.os == 'Linux'

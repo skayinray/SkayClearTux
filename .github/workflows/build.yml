@@ -38,7 +38,7 @@ jobs:
       - name: Проверка синтаксиса и дымовой тест
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python -m pytest tools/smoke_test.py
+        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
 
       - name: Сборка бандла
         run: |
@@ -83,7 +83,7 @@ jobs:
       - name: Проверка синтаксиса и дымовой тест
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python -m pytest tools/smoke_test.py
+        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
 
       - name: Сборка бандла
         run: |
@@ -126,7 +126,7 @@ jobs:
       - name: Проверка синтаксиса и дымовой тест
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python -m pytest tools/smoke_test.py
+        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
 
       - name: Иконка и сборка
         shell: pwsh
@@ -165,7 +165,7 @@ jobs:
       - name: Проверка синтаксиса и дымовой тест
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python -m pytest tools/smoke_test.py
+        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
 
       - name: Иконка и сборка
         run: |

@@ -3,310 +3,37 @@ name: build
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Версия без префикса v (например 1.3.0)"
-        required: true
-        default: "1.3.0"
-
-permissions:
-  contents: write
-
-env:
-  APP_NAME: SkayClearTux
+      - 'v*'
 
 jobs:
-  # ------------------------------------------------------------------ Linux
-  linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Зависимости
-        run: |
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get update
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get install -y libfuse2 libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
-          python -m pip install --upgrade pip
-          python -m pip install PySide6 pyinstaller
-
-      - name: Проверка синтаксиса и дымовой тест
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
-
-      - name: Сборка бандла
-        run: |
-          pyinstaller --noconfirm --clean --windowed \
-            --name "${APP_NAME}" \
-            --add-data "skaycleartux/assets:skaycleartux/assets" \
-            --icon skaycleartux/assets/tux.png \
-            --exclude-module tkinter SkayClearTux.py
-
-      - name: Сборка AppImage
-        env:
-          VERSION: ${{ github.event.inputs.version || github.ref_name }}
-        run: |
-          export VERSION="${VERSION#v}"
-          export APPIMAGE_EXTRACT_AND_RUN=1
-          bash packaging/01-linux/make_appimage.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage
-          path: build/SkayClearTux-*-x86_64.AppImage
-
-  # ------------------- Linux: пакеты .deb и .rpm (не блокируют релиз)
-  linux-packages:
-    runs-on: ubuntu-22.04
-    continue-on-error: true
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Зависимости
-        run: |
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get update
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get install -y rpm libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
-          python -m pip install --upgrade pip
-          python -m pip install PySide6 pyinstaller
-
-      - name: Проверка синтаксиса и дымовой тест
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
-
-      - name: Сборка бандла
-        run: |
-          pyinstaller --noconfirm --clean --windowed \
-            --name "${APP_NAME}" \
-            --add-data "skaycleartux/assets:skaycleartux/assets" \
-            --icon skaycleartux/assets/tux.png \
-            --exclude-module tkinter SkayClearTux.py
-
-      - name: Сборка .deb и .rpm
-        env:
-          VERSION: ${{ github.event.inputs.version || github.ref_name }}
-        run: |
-          export VERSION="${VERSION#v}"
-          bash packaging/01-linux/make_deb.sh
-          bash packaging/01-linux/make_rpm.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-packages
-          path: |
-            build/SkayClearTux-*.deb
-            build/SkayClearTux-*.rpm
-
-  # ---------------------------------------------------------------- Windows
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Зависимости
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install PySide6 pyinstaller pillow
-
-      - name: Проверка синтаксиса и дымовой тест
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
-
-      - name: Иконка и сборка
-        shell: pwsh
-        run: |
-          python -c "from PIL import Image; Image.open('skaycleartux/assets/tux.png').save('skaycleartux/assets/tux.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
-          Copy-Item -Force "packaging/02-windows/SkayClearTux.spec" "SkayClearTux.spec"
-          pyinstaller --noconfirm --clean SkayClearTux.spec
-
-      - name: Архив
-        shell: pwsh
-        run: Compress-Archive -Path dist/SkayClearTux -DestinationPath "SkayClearTux-windows.zip"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: SkayClearTux-windows.zip
-
-  # ------------------------------------------------------------------ macOS
-  macos:
-    runs-on: macos-latest
-    # macOS-раннеры иногда долго не выделяются — не блокируем ими релиз
-    continue-on-error: true
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Зависимости
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install PySide6 pyinstaller pillow
-
-      - name: Проверка синтаксиса и дымовой тест
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m compileall -q skaycleartux SkayClearTux.py tools && python tools/smoke_test.py
-
-      - name: Иконка и сборка
-        run: |
-          mkdir -p skaycleartux/assets/tux.iconset
-          python -c "from PIL import Image; src=Image.open('skaycleartux/assets/tux.png').convert('RGBA'); [src.resize((s,s),Image.LANCZOS).save(f'skaycleartux/assets/tux.iconset/icon_{s}x{s}.png') for s in (16,32,64,128,256,512,1024)]; [src.resize((s*2,s*2),Image.LANCZOS).save(f'skaycleartux/assets/tux.iconset/icon_{s}x{s}@2x.png') for s in (16,32,64,128,256,512,1024)]"
-          iconutil -c icns skaycleartux/assets/tux.iconset -o skaycleartux/assets/tux.icns
-          cp packaging/03-macos/SkayClearTux-macos.spec SkayClearTux-macos.spec
-          pyinstaller --noconfirm --clean SkayClearTux-macos.spec
-          hdiutil create -volname "SkayClearTux" -srcfolder dist/SkayClearTux.app \
-            -ov -format UDZO dist/SkayClearTux.dmg
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: dist/SkayClearTux.dmg
-
-  # ---------------------------------------------------- Release + latest.json
   release:
-    # релиз публикуется сразу после Linux и Windows;
-    # macOS добавляется отдельным job'ом, когда соберётся
-    needs: [linux, windows]
-    runs-on: ubuntu-latest
+    name: Build & Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
-      # определяем тег и версию: при пуше тега v* — сам тег,
-      # при ручном запуске — v<введённая версия>
-      - name: Параметры релиза
-        id: meta
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Системные зависимости (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="${INPUT_VERSION#v}"
-          else
-            VERSION="${REF_NAME#v}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Версия: $VERSION, тег: v$VERSION"
+          sudo apt-get update
+          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
 
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Собрать latest.json
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-          REPO: ${{ github.repository }}
+      - name: Установка зависимостей Python
         run: |
-          ls -R artifacts
-          APPIMAGE=$(find artifacts -name "SkayClearTux-*-x86_64.AppImage" | head -n1)
-          export SHA256=$(sha256sum "$APPIMAGE" | cut -d' ' -f1)
-          export FNAME=$(basename "$APPIMAGE")
-          python -c "import json,os,datetime; v=os.environ['VERSION']; d={'version':v,'url':f\"https://github.com/{os.environ['REPO']}/releases/download/v{v}/{os.environ['FNAME']}\",'sha256':os.environ['SHA256'],'notes':f'SkayClearTux {v}','published':datetime.date.today().isoformat()}; print(json.dumps(d,ensure_ascii=False,indent=2))" > latest.json
-          cat latest.json
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          pip install pyinstaller
 
-      - name: Публикация релиза
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: SkayClearTux ${{ steps.meta.outputs.version }}
-          body_path: RELEASE_NOTES.md
-          files: |
-            artifacts/linux-appimage/*
-            artifacts/windows/*
-            latest.json
-
-  # --------------------- .deb/.rpm добавляются к релизу, когда соберутся
-  linux-packages-release:
-    needs: [linux-packages, release]
-    if: ${{ always() && needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Параметры релиза
-        id: meta
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
+      - name: Сборка проекта
         run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="${INPUT_VERSION#v}"
-          else
-            VERSION="${REF_NAME#v}"
-          fi
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: linux-packages
-          path: artifacts
-
-      - name: Добавить .deb/.rpm в релиз
-        if: ${{ hashFiles('artifacts/**') != '' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          files: |
-            artifacts/*.deb
-            artifacts/*.rpm
-
-  # ------------------------- macOS добавляется к релизу, когда соберётся
-  macos-release:
-    needs: [macos, release]
-    # запускаем, если релиз уже опубликован; наличие .dmg проверяем по файлам
-    if: ${{ always() && needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Параметры релиза
-        id: meta
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="${INPUT_VERSION#v}"
-          else
-            VERSION="${REF_NAME#v}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: macos
-          path: artifacts
-
-      - name: Добавить .dmg в релиз
-        if: ${{ hashFiles('artifacts/**') != '' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          files: artifacts/*.dmg
+          python -m compileall -q skaycleartux SkayClearTux.py tools tests
+          QT_QPA_PLATFORM=offscreen python tools/smoke_test.py

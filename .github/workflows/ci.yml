@@ -48,13 +48,14 @@ jobs:
         run: python -m compileall -q skaycleartux SkayClearTux.py tools tests
 
       - name: Тест менеджеров пакетов Linux
+        if: matrix.os == 'ubuntu-latest'
         run: python tools/pkg_check.py
 
       - name: Импорт бэкенда текущей ОС
         run: python -c "from skaycleartux.backends import get_backend; b=get_backend(); print(b.name, b.display)"
 
-      - name: Тесты (Linux, с покрытия)
-        if: runner.os == 'Linux'
+      - name: Тесты (Linux, с покрытием)
+        if: matrix.os == 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
         run: >
@@ -65,13 +66,13 @@ jobs:
           --cov-report=xml
 
       - name: Тесты (macOS / Windows)
-        if: runner.os != 'Linux'
+        if: matrix.os != 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -k 'not test_ui and not test_interface' --ignore=tests/test_ui_main_window.py -k 'not test_ui and not test_interface' --ignore=tests/test_main_window.py -q
 
       - name: Загрузить отчёт покрытия
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-xml

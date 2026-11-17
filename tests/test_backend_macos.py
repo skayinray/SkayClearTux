@@ -1,5 +1,7 @@
 """Юнит-тесты macOS-бэкенда (``skaycleartux.backends.macos``).
 
+import sys
+pytestmark = pytest.mark.skipif(sys.platform == 'win32', reason='Mac-only tests')
 Проверяем разбор вывода утилит macOS и корректную деградацию там, где
 Homebrew или утилита недоступны. Реальная система не затрагивается.
 """

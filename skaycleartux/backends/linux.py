@@ -1,4 +1,9 @@
-"""Linux-бэкенд: systemd, pacman, /proc, /sys, lm-sensors, XDG-autostart."""
+"""Linux-бэкенд: systemd, менеджеры пакетов, /proc, /sys, lm-sensors, XDG-autostart.
+
+Работа с пакетами делегируется модулю `linux_pkg`, который сам определяет
+дистрибутив (pacman/apt/dnf/zypper/apk) — поэтому программа работает не только
+на Arch.
+"""
 from __future__ import annotations
 
 import json
@@ -8,7 +13,7 @@ import signal
 import urllib.parse
 from pathlib import Path
 
-from . import common
+from . import common, linux_pkg
 from .base import BaseBackend
 
 AUTOSTART_USER = Path.home() / ".config" / "autostart"
@@ -78,71 +83,32 @@ class LinuxBackend(BaseBackend):
 
     # --------------------------------------------------------------- пакеты
     def package_manager(self) -> str:
-        return "pacman"
+        return linux_pkg.detect().key
 
     def search_packages(self, query: str) -> list[dict]:
-        r = common.run(["pacman", "-Ss", query])
-        rows: list[dict] = []
-        cur: dict | None = None
-        for line in (r.stdout or "").splitlines():
-            if line.startswith((" ", "\t")):
-                if cur is not None:
-                    cur["desc"] = (cur["desc"] + " " + line.strip()).strip()
-                continue
-            head = line.split()
-            if not head or "/" not in head[0]:
-                continue
-            repo, name = head[0].split("/", 1)
-            version = head[1] if len(head) > 1 else ""
-            rest = head[2:]
-            installed = "[installed]" in rest
-            cur = {"repo": repo, "name": name, "version": version,
-                   "installed": installed,
-                   "desc": " ".join(t for t in rest if t != "[installed]")}
-            rows.append(cur)
-        return rows
+        return linux_pkg.detect().search(query)
 
     def install_packages(self, names: list[str]) -> tuple[bool, str]:
-        r = common.run(["pacman", "-S", "--noconfirm", *names], root=True)
-        return r.returncode == 0, (r.stdout or "").strip()[-4000:]
+        return linux_pkg.detect().install(names)
 
     def remove_packages(self, names: list[str]) -> tuple[bool, str]:
-        r = common.run(["pacman", "-Rns", "--noconfirm", *names], root=True)
-        return r.returncode == 0, (r.stdout or "").strip()[-4000:]
+        return linux_pkg.detect().remove(names)
 
     def package_files(self, pkg: str) -> str:
-        if not pkg.strip():
-            return "Укажи имя пакета"
-        return common.run_out(["pacman", "-Ql", pkg.strip()]) or \
-            "Пакет не найден или не установлен"
+        return linux_pkg.detect().files(pkg)
 
     def file_owner(self, path: str) -> str:
-        if not path.strip():
-            return "Укажи путь к файлу"
-        return common.run_out(["pacman", "-Qo", path.strip()]) or \
-            "Файл не принадлежит ни одному пакету"
+        return linux_pkg.detect().owner(path)
 
     def package_info(self, pkg: str) -> str:
-        if not pkg.strip():
-            return "Укажи имя пакета"
-        return common.run_out(["pacman", "-Qi", pkg.strip()]) or "Пакет не найден"
+        return linux_pkg.detect().info(pkg)
 
     # ----------------------------------------------------------- обновления
     def check_updates(self) -> list[dict]:
-        tool = ["checkupdates"] if shutil.which("checkupdates") else ["pacman", "-Qu"]
-        r = common.run(tool)
-        rows: list[dict] = []
-        for line in (r.stdout or "").splitlines():
-            parts = line.split()
-            if len(parts) >= 4 and parts[2] == "->":
-                rows.append({"name": parts[0], "old": parts[1], "new": parts[3]})
-            elif len(parts) >= 2:
-                rows.append({"name": parts[0], "old": "", "new": parts[-1]})
-        return rows
+        return linux_pkg.detect().updates()
 
     def system_update(self) -> tuple[bool, str]:
-        r = common.run(["pacman", "-Syu", "--noconfirm"], root=True)
-        return r.returncode == 0, (r.stdout or "").strip()[-6000:]
+        return linux_pkg.detect().upgrade()
 
     # ----------------------------------------------------------------- сеть
     def network_info(self) -> dict:

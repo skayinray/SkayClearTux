@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  SkayClearTux v1.2.0 - сборка Windows .exe (PyInstaller)
+rem  SkayClearTux v1.3.0 - сборка Windows .exe (PyInstaller)
 rem  Запускать из корня проекта (там, где SkayClearTux.py).
 rem ============================================================
 setlocal

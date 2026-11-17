@@ -29,6 +29,9 @@ jobs:
       - name: Проверка синтаксиса
         run: python -m compileall -q skaycleartux SkayClearTux.py
 
+      - name: Тест менеджеров пакетов Linux
+        run: python tools/pkg_check.py
+
       - name: Импорт бэкенда текущей ОС
         run: python -c "from skaycleartux.backends import get_backend; b=get_backend(); print(b.name, b.display)"
 

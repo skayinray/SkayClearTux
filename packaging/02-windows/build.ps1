@@ -1,4 +1,4 @@
-# SkayClearTux v1.2.0 — сборка Windows (PowerShell)
+# SkayClearTux v1.3.0 — сборка Windows (PowerShell)
 # Запуск из корня проекта:  powershell -ExecutionPolicy Bypass -File packaging\02-windows\build.ps1
 $ErrorActionPreference = "Stop"
 

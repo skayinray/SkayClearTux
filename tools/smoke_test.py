@@ -114,6 +114,8 @@ def main() -> int:
     print(f"Палитра команд: {palette.list.count()} совпадений по запросу «очис»")
 
     print(f"Категорий очистки: {len(cleaner.CATEGORIES)}")
+    if common.FAMILY == "linux":
+        print(f"Менеджер пакетов: {st.package_manager() or 'не определён'}")
 
     if problems:
         print("\n=== ПРОБЛЕМЫ ===")
@@ -126,4 +128,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # os._exit обходит падение Qt при завершении в offscreen-режиме,
+    # из-за которого процесс мог завершаться сигналом SIGABRT.
+    _code = main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_code)

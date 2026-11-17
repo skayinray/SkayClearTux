@@ -24,7 +24,7 @@ bash packaging/03-macos/build.sh
 * создаёт окружение `.venv-mac`, ставит `PySide6`, `pyinstaller`, `pillow`;
 * делает иконку `.icns`;
 * собирает `dist/SkayClearTux.app`;
-* упаковывает в `dist/SkayClearTux-1.2.0.dmg`.
+* упаковывает в `dist/SkayClearTux-1.3.0.dmg`.
 
 ## Первый запуск
 
@@ -45,9 +45,9 @@ pyinstaller --target-arch universal2 --noconfirm --clean SkayClearTux-macos.spec
 ```bash
 codesign --deep --force --options runtime \
     --sign "Developer ID Application: ВАШЕ ИМЯ (TEAMID)" dist/SkayClearTux.app
-xcrun notarytool submit dist/SkayClearTux-1.2.0.dmg \
+xcrun notarytool submit dist/SkayClearTux-1.3.0.dmg \
     --apple-id "you@example.com" --team-id TEAMID --password "app-specific-pw" --wait
-xcrun stapler staple dist/SkayClearTux-1.2.0.dmg
+xcrun stapler staple dist/SkayClearTux-1.3.0.dmg
 ```
 
 Для нотаризации нужен платный Apple Developer аккаунт. Без него приложение

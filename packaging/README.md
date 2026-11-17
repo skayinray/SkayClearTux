@@ -1,9 +1,9 @@
-# SkayClearTux v1.2 — сборка под Linux, macOS и Windows
+# SkayClearTux v1.3 — сборка под Linux, macOS и Windows
 
 Здесь лежит всё, чтобы собрать **SkayClearTux** под каждую настольную систему.
 Проект теперь **только для ПК** — один и тот же Python-код собирается в
-AppImage (Linux), `.zip` с `.exe` (Windows) и `.dmg` (macOS). Мобильные порты
-(Android/iOS/PWA) удалены.
+AppImage/`.deb`/`.rpm` (Linux), `.zip` с `.exe` (Windows) и `.dmg` (macOS).
+Мобильные порты (Android/iOS/PWA) удалены.
 
 Готовые сборки публикуются автоматически на странице
 [Releases](https://github.com/skayinray/SkayClearTux/releases) при пуше тега
@@ -11,7 +11,9 @@ AppImage (Linux), `.zip` с `.exe` (Windows) и `.dmg` (macOS). Мобильны
 
 | Платформа | Файл релиза | Как запустить |
 |-----------|-------------|---------------|
-| Linux | `SkayClearTux-1.2.0-x86_64.AppImage` | `chmod +x` и запустить |
+| Linux (любой) | `SkayClearTux-1.3.0-x86_64.AppImage` | `chmod +x` и запустить |
+| Debian/Ubuntu | `SkayClearTux-1.3.0-amd64.deb` | `sudo apt install ./SkayClearTux-1.3.0-amd64.deb` |
+| Fedora/RHEL/openSUSE | `SkayClearTux-1.3.0-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.3.0-x86_64.rpm` |
 | Windows | `SkayClearTux-windows.zip` | распаковать, запустить `SkayClearTux.exe` |
 | macOS | `SkayClearTux.dmg` | открыть образ, перетащить в «Программы» |
 
@@ -24,7 +26,7 @@ AppImage (Linux), `.zip` с `.exe` (Windows) и `.dmg` (macOS). Мобильны
 
 ```
 packaging/
-├── 01-linux/            AppImage: make_appimage.sh + install.sh + ярлык
+├── 01-linux/            AppImage/.deb/.rpm: make_*.sh + stage_tree.sh + ярлык
 ├── 02-windows/          build.bat / build.ps1 + SkayClearTux.spec
 ├── 03-macos/            build.sh + SkayClearTux-macos.spec
 ├── latest.json.example  пример манифеста дистанционных обновлений
@@ -33,7 +35,7 @@ packaging/
 
 | № | Папка | Платформа | Что нужно |
 |---|-------|-----------|-----------|
-| 01 | [`01-linux`](01-linux) | Linux | Python 3.11+ (сборка) или готовый AppImage |
+| 01 | [`01-linux`](01-linux) | Linux | Python 3.11+ (сборка) или готовый AppImage/пакет; для `.deb` — `dpkg-deb`, для `.rpm` — `rpmbuild` |
 | 02 | [`02-windows`](02-windows) | Windows 10/11 | Windows + Python 3.11+ |
 | 03 | [`03-macos`](03-macos) | macOS | Mac + Xcode Command Line Tools |
 
@@ -41,7 +43,7 @@ packaging/
 
 ## Быстрая сборка
 
-### Linux — AppImage
+### Linux — AppImage, `.deb` и `.rpm`
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -51,10 +53,13 @@ pyinstaller --noconfirm --clean --windowed \
     --add-data "skaycleartux/assets:skaycleartux/assets" \
     --icon skaycleartux/assets/tux.png \
     --exclude-module tkinter SkayClearTux.py
-VERSION=1.2.0 bash packaging/01-linux/make_appimage.sh
+VERSION=1.3.0 bash packaging/01-linux/make_appimage.sh   # AppImage
+VERSION=1.3.0 bash packaging/01-linux/make_deb.sh        # .deb (нужен dpkg-deb)
+VERSION=1.3.0 bash packaging/01-linux/make_rpm.sh        # .rpm (нужен rpmbuild)
 ```
 
-Готовый файл: `build/SkayClearTux-1.2.0-x86_64.AppImage`.
+Готовые файлы: `build/SkayClearTux-1.3.0-x86_64.AppImage`,
+`build/SkayClearTux-1.3.0-amd64.deb`, `build/SkayClearTux-1.3.0-x86_64.rpm`.
 
 ### Windows — `.zip` с `.exe`
 
@@ -71,7 +76,7 @@ powershell -ExecutionPolicy Bypass -File packaging\02-windows\build.ps1
 bash packaging/03-macos/build.sh
 ```
 
-Готово: `dist/SkayClearTux.app` и `dist/SkayClearTux-1.2.0.dmg`.
+Готово: `dist/SkayClearTux.app` и `dist/SkayClearTux-1.3.0.dmg`.
 
 ---
 
@@ -86,8 +91,8 @@ bash packaging/03-macos/build.sh
 
 ```json
 {
-  "version": "1.2.0",
-  "url": "https://github.com/skayinray/SkayClearTux/releases/download/v1.2.0/SkayClearTux-1.2.0-x86_64.AppImage",
+  "version": "1.3.0",
+  "url": "https://github.com/skayinray/SkayClearTux/releases/download/v1.3.0/SkayClearTux-1.3.0-x86_64.AppImage",
   "sha256": "....",
   "notes": "Что нового в этой версии",
   "published": "2026-11-16"
@@ -98,14 +103,14 @@ bash packaging/03-macos/build.sh
 `sha256` так:
 
 ```bash
-sha256sum SkayClearTux-1.2.0-x86_64.AppImage
+sha256sum SkayClearTux-1.3.0-x86_64.AppImage
 ```
 
 CI из [`.github/workflows/build.yml`](../.github/workflows/build.yml) собирает
 все три сборки, публикует их в GitHub Releases и **автоматически создаёт
 `latest.json`** — достаточно указать ссылку на него в настройках приложения.
 
-> Релиз запускается по тегу: `git tag v1.2.0 && git push --tags`.
+> Релиз запускается по тегу: `git tag v1.3.0 && git push --tags`.
 
 ---
 

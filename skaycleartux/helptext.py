@@ -49,8 +49,8 @@ PAGE_HELP: dict[str, tuple[str, str, str]] = {
                "Задачи по расписанию: что и когда запустится (systemd-таймеры — Linux, "
                "launchd — macOS, Планировщик заданий — Windows)."),
     "packages": ("Инструменты", "Пакеты",
-                 "Поиск, установка и удаление пакетов (pacman — Linux, Homebrew — "
-                 "macOS, winget/choco — Windows) с логом вывода."),
+                 "Поиск, установка и удаление пакетов (pacman/apt/dnf/zypper/apk — "
+                 "Linux, Homebrew — macOS, winget/choco — Windows) с логом вывода."),
     "pkgfiles": ("Инструменты", "Файлы пакетов",
                  "Какие файлы установил пакет и какому пакету принадлежит файл, "
                  "а также подробная информация о пакете."),

@@ -9,7 +9,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 BUILD="$ROOT/build"
 APPDIR="$BUILD/SkayClearTux.AppDir"
-VER="${VERSION:-1.2}"
+VER="${VERSION:-1.3}"
 NAME="SkayClearTux"
 
 if [ ! -d "$ROOT/dist/$NAME" ]; then

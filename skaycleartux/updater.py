@@ -3,8 +3,8 @@
 Программа периодически читает JSON-манифест по URL вида:
 
     {
-      "version": "1.2.0",
-      "url": "https://.../SkayClearTux-1.2.0-x86_64.AppImage",
+      "version": "1.3.0",
+      "url": "https://.../SkayClearTux-1.3.0-x86_64.AppImage",
       "sha256": "....",           // необязательно, но рекомендуется
       "notes": "Что нового...",
       "published": "2026-11-16"

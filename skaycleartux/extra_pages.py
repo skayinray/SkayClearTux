@@ -343,7 +343,8 @@ class UpdatesPage(QWidget):
         root.setSpacing(12)
         root.addWidget(title("Обновления"))
         root.addWidget(dim("Проверка и установка обновлений системы "
-                           "(pacman — Linux, Homebrew — macOS, winget — Windows)"))
+                           "(pacman/apt/dnf/zypper/apk — Linux, Homebrew — macOS, "
+                           "winget — Windows)"))
 
         bar = QHBoxLayout()
         self.btn_check = QPushButton("Проверить обновления")
@@ -413,7 +414,7 @@ class UpdatesPage(QWidget):
 
 # =========================================================================== #
 class PkgFilesPage(QWidget):
-    """Файлы пакета и владелец файла (Linux: pacman -Ql / -Qo / -Qi)."""
+    """Файлы пакета и владелец файла (Linux: pacman/dpkg/rpm/apk — по системе)."""
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)

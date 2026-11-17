@@ -47,9 +47,9 @@
 
 | Раздел | Linux | macOS | Windows |
 |--------|:-----:|:-----:|:-------:|
-| Очистка (категории мусора) | ✅ pacman/systemd/Flatpak/Docker | ✅ Homebrew/кэши/Xcode | ✅ `%TEMP%`/кэши/корзина |
+| Очистка (категории мусора) | ✅ pacman/apt/dnf/zypper/apk + systemd/Flatpak/Docker | ✅ Homebrew/кэши/Xcode | ✅ `%TEMP%`/кэши/корзина |
 | Процессы, службы, автозапуск | ✅ | ✅ `launchctl` | ✅ службы Windows |
-| Пакеты и обновления | ✅ `pacman` | ✅ `brew` | ✅ `winget`/`choco` |
+| Пакеты и обновления | ✅ `pacman`/`apt`/`dnf`/`zypper`/`apk` | ✅ `brew` | ✅ `winget`/`choco` |
 | Сеть и порты | ✅ `ip`/`ss` | ✅ `ifconfig`/`lsof` | ✅ `ipconfig`/`netstat` |
 | Датчики, батарея, железо | ✅ `lm-sensors` | ✅ `powermetrics` | ✅ WMI |
 | Журнал, диагностика | ✅ `journalctl` | ✅ `log show` | ✅ Журнал событий |
@@ -92,9 +92,14 @@
 
 | Платформа | Файл | Запуск |
 |-----------|------|--------|
-| Linux | `SkayClearTux-1.2.0-x86_64.AppImage` | `chmod +x` и запустить |
+| Linux (любой) | `SkayClearTux-1.3.0-x86_64.AppImage` | `chmod +x` и запустить |
+| Debian/Ubuntu | `SkayClearTux-1.3.0-amd64.deb` | `sudo apt install ./SkayClearTux-1.3.0-amd64.deb` |
+| Fedora/RHEL/openSUSE | `SkayClearTux-1.3.0-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.3.0-x86_64.rpm` |
 | Windows | `SkayClearTux-windows.zip` | распаковать, запустить `SkayClearTux.exe` |
 | macOS | `SkayClearTux.dmg` | открыть образ, перетащить в «Программы» |
+
+На Linux пакеты и обновления работают с любым из менеджеров
+**pacman / apt / dnf / zypper / apk** — нужный определяется автоматически.
 
 > **Первый запуск на macOS.** Приложение не подписано — щёлкните по нему правой
 > кнопкой → **Открыть** → **Открыть**.
@@ -131,7 +136,7 @@ skaycleartux
 
 | Платформа | Как собрать |
 |-----------|-------------|
-| Linux (AppImage) | `packaging/01-linux/` |
+| Linux (AppImage, `.deb`, `.rpm`) | `packaging/01-linux/` |
 | Windows (`.exe`) | `packaging/02-windows/` |
 | macOS (`.app` + `.dmg`) | `packaging/03-macos/` |
 
@@ -158,6 +163,7 @@ skaycleartux/
     common.py                общие утилиты (запуск команд, права, пути)
     base.py                  интерфейс бэкенда и безопасные заглушки
     linux.py  macos.py  windows.py
+    linux_pkg.py             менеджеры пакетов Linux (pacman/apt/dnf/zypper/apk)
   system_tools.py            фасад над бэкендом (весь API страниц)
   cleaner.py                 движок очистки (категории по ОС)
   pages.py                   главная, очистка, анализ диска, темы, о программе

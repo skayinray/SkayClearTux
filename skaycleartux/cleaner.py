@@ -4,8 +4,9 @@
 системный запрос пароля (pkexec/sudo на Linux, osascript на macOS, UAC на
 Windows) — см. common.run(root=True).
 
-Категории мусора подбираются под текущую ОС: Linux — pacman/systemd, macOS —
-Homebrew/LaunchServices, Windows — временные файлы и кэши браузеров.
+Категории мусора подбираются под текущую ОС: Linux — менеджер пакетов
+(pacman/apt/dnf/zypper/apk) и systemd, macOS — Homebrew/LaunchServices,
+Windows — временные файлы и кэши браузеров.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .backends import common
+from .backends import common, linux_pkg
 
 HOME = Path.home()
 FAMILY = common.FAMILY
@@ -84,16 +85,13 @@ def _clean_dir(p: Path):
 #  Linux
 # =========================================================================== #
 def _linux_categories() -> list[Category]:
-    def scan_pacman():
-        p = Path("/var/cache/pacman/pkg")
-        n = len(list(p.glob("*.pkg.tar.*"))) if p.is_dir() else 0
-        return du_bytes(p), f"{n} файлов пакетов"
+    mgr = linux_pkg.detect()
 
-    def clean_pacman():
-        before = du_bytes(Path("/var/cache/pacman/pkg"))
-        run(["paccache", "-rk1"], root=True)
-        return max(0, before - du_bytes(Path("/var/cache/pacman/pkg"))), \
-            "paccache -rk1 (оставлена 1 версия)"
+    def scan_pkgcache():
+        return mgr.cache_scan()
+
+    def clean_pkgcache():
+        return mgr.cache_clean()
 
     def scan_journal():
         s = out(["journalctl", "--disk-usage"])
@@ -113,25 +111,10 @@ def _linux_categories() -> list[Category]:
         return max(0, before - scan_journal()[0]), "vacuum до 150 МБ"
 
     def scan_orphans():
-        pkgs = [p for p in out(["pacman", "-Qdtq"]).split("\n") if p]
-        total = 0
-        for p in pkgs:
-            for line in out(["pacman", "-Qi", p]).splitlines():
-                if line.startswith("Installed Size"):
-                    part = line.split(":", 1)[1].strip().split()
-                    if len(part) == 2:
-                        total += int(float(part[0]) * {
-                            "b": 1, "kib": 1024, "mib": 1024 ** 2,
-                            "gib": 1024 ** 3}.get(part[1].lower(), 0))
-        return total, (", ".join(pkgs) if pkgs else "нет сирот")
+        return mgr.orphans_scan()
 
     def clean_orphans():
-        pkgs = [p for p in out(["pacman", "-Qdtq"]).split("\n") if p]
-        if not pkgs:
-            return 0, "сирот нет"
-        before = scan_orphans()[0]
-        run(["pacman", "-Rns", "--noconfirm", *pkgs], root=True)
-        return before, f"удалено {len(pkgs)} пакетов"
+        return mgr.orphans_clean()
 
     def scan_flatpak():
         if not shutil.which("flatpak"):
@@ -182,16 +165,14 @@ def _linux_categories() -> list[Category]:
                         pass
         return freed, "удалены старые логи"
 
-    return [
-        Category("pacman-cache", "Кэш пакетов pacman",
-                 "Скачанные пакеты. Оставляем 1 последнюю версию каждого — "
-                 "откат возможен.", "low", needs_root=True,
-                 scan=scan_pacman, clean=clean_pacman),
+    pkg_title = f" {mgr.title}".rstrip()
+    cats = [
+        Category("pkg-cache", f"Кэш пакетов{pkg_title}",
+                 "Скачанные пакеты. Оставляем последние версии — откат возможен.",
+                 "low", needs_root=True,
+                 scan=scan_pkgcache, clean=clean_pkgcache),
         Category("journal", "Журнал systemd", "Ужимаем до 150 МБ. Свежие логи остаются.",
                  "low", needs_root=True, scan=scan_journal, clean=clean_journal),
-        Category("yay-cache", "Кэш сборки yay",
-                 "Исходники и пакеты AUR-сборок. Пересоберутся при следующем обновлении.",
-                 "low", scan=_scan_dir(CACHE / "yay"), clean=_clean_dir(CACHE / "yay")),
         Category("browser-cache", "Кэш браузеров", "Firefox/Chromium. Пересоздаётся сам.",
                  "low", scan=_scan_dir(CACHE / "mozilla"),
                  clean=_clean_dir(CACHE / "mozilla")),
@@ -228,6 +209,15 @@ def _linux_categories() -> list[Category]:
                  "Установленные как зависимости, но больше никому не нужные.",
                  "medium", needs_root=True, scan=scan_orphans, clean=clean_orphans),
     ]
+
+    # кэш AUR-хелперов имеет смысл только там, где они установлены
+    aur = "yay" if shutil.which("yay") else ("paru" if shutil.which("paru") else "")
+    if aur:
+        cats.insert(2, Category(
+            "yay-cache", f"Кэш сборки {aur}",
+            "Исходники и пакеты AUR-сборок. Пересоберутся при следующем обновлении.",
+            "low", scan=_scan_dir(CACHE / aur), clean=_clean_dir(CACHE / aur)))
+    return cats
 
 
 # =========================================================================== #

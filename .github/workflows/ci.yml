@@ -22,12 +22,16 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
 
-      - name: Зависимости
+      - name: Системные зависимости (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get update && sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1 && python -m pip install --upgrade pip
-      if: matrix.os == 'ubuntu-latest'
-          sudo apt-get update && sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1 && python -m pip install -e ".[dev]"
+          sudo apt-get update
+          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
+
+      - name: Установка зависимостей Python (Все ОС)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
 
       - name: Линтер (ruff)
         run: python -m ruff check skaycleartux tests tools
@@ -49,7 +53,7 @@ jobs:
       - name: Импорт бэкенда текущей ОС
         run: python -c "from skaycleartux.backends import get_backend; b=get_backend(); print(b.name, b.display)"
 
-      - name: Тесты (Linux, с покрытием)
+      - name: Тесты (Linux, с покрытия)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
@@ -59,7 +63,6 @@ jobs:
           --cov=skaycleartux.cleaner
           --cov-report=term-missing
           --cov-report=xml
-          
 
       - name: Тесты (macOS / Windows)
         if: runner.os != 'Linux'

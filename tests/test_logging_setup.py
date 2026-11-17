@@ -1,10 +1,10 @@
-import sys
 """Тесты логирования — ``skaycleartux.logging_setup``.
 
 Проверяем выбор каталога под каждую ОС, создание файла лога, ротацию и
 поведение, когда каталог недоступен для записи.
 """
 from __future__ import annotations
+import sys
 
 import logging
 import logging.handlers

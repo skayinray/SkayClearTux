@@ -1,10 +1,10 @@
-import sys
 """Юнит-тесты Linux-бэкенда (``skaycleartux.backends.linux``).
 
 Все вызовы подпроцессов подменяются, файлы /proc и /sys — тоже, поэтому
 тесты идут на любой ОС и не трогают реальную систему.
 """
 from __future__ import annotations
+import sys
 
 import subprocess
 from pathlib import Path

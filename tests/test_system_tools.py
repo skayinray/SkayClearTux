@@ -5,6 +5,7 @@
 подменяется фейком, поэтому тесты не зависят от ОС.
 """
 from __future__ import annotations
+import sys
 
 import subprocess
 

@@ -1,4 +1,3 @@
-import sys
 """Юнит-тесты macOS-бэкенда (``skaycleartux.backends.macos``).
 
 Проверяем разбор вывода утилит macOS и корректную деградацию там, где

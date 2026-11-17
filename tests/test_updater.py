@@ -1,4 +1,3 @@
-import sys
 """Юнит-тесты дистанционных обновлений (``skaycleartux.updater``).
 
 Сеть не используется: ``urllib.request.urlopen`` и ``subprocess.Popen``
@@ -6,6 +5,7 @@ import sys
 адрес и несовпадение контрольной суммы.
 """
 from __future__ import annotations
+import sys
 
 import hashlib
 import json

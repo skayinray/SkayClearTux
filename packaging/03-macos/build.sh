@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SkayClearTux v1.5.0 — сборка для macOS (.app и .dmg).
+# SkayClearTux v1.5.1 — сборка для macOS (.app и .dmg).
 # Запуск из корня проекта:  bash packaging/03-macos/build.sh
 set -e
 
@@ -35,7 +35,7 @@ pyinstaller --noconfirm --clean SkayClearTux-macos.spec
 
 echo "==> Сборка .dmg"
 APP="dist/SkayClearTux.app"
-DMG="dist/SkayClearTux-${VERSION:-1.5.0}.dmg"
+DMG="dist/SkayClearTux-${VERSION:-1.5.1}.dmg"
 if command -v hdiutil >/dev/null 2>&1; then
     rm -f "$DMG"
     hdiutil create -volname "SkayClearTux" -srcfolder "$APP" -ov -format UDZO "$DMG"

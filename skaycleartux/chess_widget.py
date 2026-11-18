@@ -91,6 +91,8 @@ class BoardView(QWidget):
         self.show_hints = True
         self.highlight_last = True
         # анимация хода
+        # значок оценки хода на клетке назначения: (square, label)
+        self.move_badge: tuple[int, str] | None = None
         self._anim: dict | None = None
         self._anim_progress = 0.0
         self._anim_anim = QVariantAnimation(self)
@@ -193,7 +195,45 @@ class BoardView(QWidget):
             cy = frm.y() + (to.y() - frm.y()) * t
             pm = piece_pixmap(self._anim["piece"], size)
             p.drawPixmap(int(cx - pm.width() / 2), int(cy - pm.height() / 2), pm)
+
+        # значок качества хода (в углу клетки назначения), как в chess.com
+        if self.move_badge:
+            bsq, blabel = self.move_badge
+            self._draw_move_badge(p, bsq, blabel, sq, ox, oy)
         p.end()
+
+    def _draw_move_badge(self, p: QPainter, i: int, label: str,
+                         sq: float, ox: float, oy: float) -> None:
+        styles = {
+            "Блестящий ход": ("!!", QColor("#1baca6"), QColor("#ffffff")),
+            "Лучший ход": ("★", QColor("#81b64c"), QColor("#ffffff")),
+            "Отличный ход": ("!", QColor("#96bc4b"), QColor("#ffffff")),
+            "Хороший ход": ("✓", QColor("#96af8b"), QColor("#ffffff")),
+            "Неточность": ("?!", QColor("#f7c631"), QColor("#2b2b2b")),
+            "Ошибка": ("?", QColor("#ffa459"), QColor("#ffffff")),
+            "Зевок": ("??", QColor("#fa412d"), QColor("#ffffff")),
+        }
+        mark, bg, fg = styles.get(label, ("•", QColor("#6b7280"), QColor("#ffffff")))
+        rect = self._rect(i, sq, ox, oy)
+        r = max(8.0, sq * 0.18)
+        cx = rect.right() - r * 0.15
+        cy = rect.top() + r * 0.15
+        badge = QRectF(cx - r * 2, cy, r * 2, r * 2)
+        # небольшое смещение внутрь клетки
+        badge.translate(-r * 0.15, r * 0.15)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(bg))
+        p.drawEllipse(badge)
+        # обводка для читаемости
+        p.setPen(QPen(QColor(0, 0, 0, 60), 1.2))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(badge)
+        f = QFont("DejaVu Sans")
+        f.setBold(True)
+        f.setPixelSize(max(8, int(r * 0.95)))
+        p.setFont(f)
+        p.setPen(fg)
+        p.drawText(badge, Qt.AlignCenter, mark)
 
     # ------------------------------------------------------------ анимация
     def animate_move(self, frm: int, to: int, duration: int = 200) -> None:
@@ -260,7 +300,8 @@ class ChessPage(QWidget):
         self.human = "w"
         self._thread: BotThread | None = None
         self._analysis_thread: AnalysisThread | None = None
-        self._analysis_queue: list[tuple[int, str, tuple[int, int, str], str]] = []
+        self._analysis_queue: list[tuple[int, str, tuple[int, int, str], str, int]] = []
+        self._analysis_target: tuple[int, int] | None = None
         self._mode = "bot"
         self._result_recorded = False
         self._last_delta = 0
@@ -401,10 +442,12 @@ class ChessPage(QWidget):
         self.view.hint_move = None
         self.view.premove = None
         self.view.check_sq = None
+        self.view.move_badge = None
         self.view.interactive = True
         self._premove_from = None
         self.moves.clear()
         self._analysis_queue.clear()
+        self._analysis_target = None
         self._result_recorded = False
         self._last_delta = 0
         self._mode = "bot"
@@ -425,6 +468,8 @@ class ChessPage(QWidget):
         self._game_token += 1
         self.view.stop_animation()
         self._analysis_queue.clear()
+        self._analysis_target = None
+        self.view.move_badge = None
         if not g.history:
             return
         g.undo()
@@ -646,6 +691,7 @@ class ChessPage(QWidget):
         self.view.hint_move = None
         self.view.selected = None
         self.view.targets = []
+        self.view.move_badge = None
         self._premove_from = None
         if self.settings.get_bool("chess/animate"):
             self.view.animate_move(frm, to, self.settings.get_int("ui/anim_ms") + 60)
@@ -662,7 +708,7 @@ class ChessPage(QWidget):
 
     def _queue_analysis(self, fen_before: str, move: tuple[int, int, str], base: str) -> None:
         move_index = self.moves.count() - 1
-        self._analysis_queue.append((move_index, fen_before, move, base))
+        self._analysis_queue.append((move_index, fen_before, move, base, move[1]))
         self._start_next_analysis()
 
     def _start_next_analysis(self) -> None:
@@ -672,8 +718,9 @@ class ChessPage(QWidget):
             return
         if not self._analysis_queue:
             return
-        move_index, fen_before, move, _base = self._analysis_queue.pop(0)
+        move_index, fen_before, move, _base, to_sq = self._analysis_queue.pop(0)
         depth = 2 if self.LEVELS.get(self.level.currentText(), 2) >= 3 else 2
+        self._analysis_target = (move_index, to_sq)
         # очень короткий бюджет, чтобы не создавать лаги
         self._analysis_thread = AnalysisThread(
             fen_before, move, self._game_token, move_index, depth=depth, time_limit=0.35)
@@ -696,6 +743,12 @@ class ChessPage(QWidget):
             if not label:
                 label = "—"
             item.setText(f"{base}  {label}")
+            # показываем значок на доске для последнего проанализированного хода
+            target = getattr(self, "_analysis_target", None)
+            if (label and label != "—" and target and target[0] == move_index
+                    and move_index == self.moves.count() - 1):
+                self.view.move_badge = (target[1], label)
+                self.view.update()
         except Exception:  # noqa: BLE001
             pass
         finally:

@@ -179,13 +179,50 @@ def _urlopen(req, timeout: float):
     return opener(req, timeout=timeout)
 
 
+def _github_latest_manifest_url(repo: str = "skayinray/SkayClearTux") -> str | None:
+    """Запасной способ: найти latest.json среди assets последнего релиза GitHub."""
+    api = f"https://api.github.com/repos/{repo}/releases/latest"
+    req = urllib.request.Request(api, headers={
+        "User-Agent": USER_AGENT,
+        "Accept": "application/vnd.github+json",
+    })
+    try:
+        with _urlopen(req, timeout=12.0) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(data, dict):
+        return None
+    for asset in data.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        if str(asset.get("name") or "") == "latest.json":
+            url = str(asset.get("browser_download_url") or "").strip()
+            return url or None
+    return None
+
+
 def fetch_manifest(url: str, timeout: float = 12.0) -> dict:
     url = _validate_url(url, what="адрес манифеста обновлений")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with _urlopen(req, timeout=timeout) as resp:
-        if not _final_url(resp, url).lower().startswith("https://"):
-            raise ValueError("манифест получен не по HTTPS")
-        raw = resp.read().decode("utf-8", errors="replace")
+    try:
+        with _urlopen(req, timeout=timeout) as resp:
+            if not _final_url(resp, url).lower().startswith("https://"):
+                raise ValueError("манифест получен не по HTTPS")
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            fallback = _github_latest_manifest_url()
+            if fallback and fallback != url:
+                req2 = urllib.request.Request(fallback, headers={"User-Agent": USER_AGENT})
+                with _urlopen(req2, timeout=timeout) as resp:
+                    if not _final_url(resp, fallback).lower().startswith("https://"):
+                        raise ValueError("манифест получен не по HTTPS") from e
+                    raw = resp.read().decode("utf-8", errors="replace")
+            else:
+                raise
+        else:
+            raise
     data = json.loads(raw)
     if not isinstance(data, dict) or "version" not in data:
         raise ValueError("манифест повреждён: нет поля version")

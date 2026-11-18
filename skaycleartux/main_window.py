@@ -10,7 +10,7 @@ from PySide6.QtCore import (QEasingCurve, QPropertyAnimation, Qt, QTimer,
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
                                QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-                               QMainWindow, QMenu, QMessageBox, QPushButton,
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QStackedWidget, QSystemTrayIcon,
                                QVBoxLayout, QWidget)
 
@@ -94,7 +94,8 @@ class FadeStack(QStackedWidget):
             self.page_changed.emit(index)
             return
 
-        duration = max(120, self.settings.get_int("ui/anim_ms"))
+        # короткий кроссфейд для плавности без ощутимых лагов
+        duration = min(180, max(90, self.settings.get_int("ui/anim_ms")))
         pix = self._snapshot(self.currentWidget())
         super().setCurrentIndex(index)
         self.page_changed.emit(index)
@@ -111,7 +112,7 @@ class FadeStack(QStackedWidget):
         anim.setDuration(duration)
         anim.setStartValue(1.0)
         anim.setEndValue(0.0)
-        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.setEasingCurve(QEasingCurve.OutQuad)
         anim.finished.connect(self._overlay.hide)
         anim.start()
         self._anim_out = anim
@@ -251,6 +252,12 @@ class MainWindow(QMainWindow):
         brand.addStretch(1)
         outer.addLayout(brand)
 
+        self.nav_search = QLineEdit()
+        self.nav_search.setPlaceholderText("Поиск разделов и функций…")
+        self.nav_search.setClearButtonEnabled(True)
+        self.nav_search.textChanged.connect(self._filter_nav)
+        outer.addWidget(self.nav_search)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -261,6 +268,7 @@ class MainWindow(QMainWindow):
         col.setSpacing(3)
 
         self.nav_buttons: list[QPushButton] = []
+        self.nav_meta: list[dict] = []
         group = QButtonGroup(self)
         group.setExclusive(True)
         self._nav_group = group
@@ -282,15 +290,18 @@ class MainWindow(QMainWindow):
                 b.setObjectName("Nav")
                 b.setCheckable(True)
                 b.setCursor(Qt.PointingHandCursor)
-                if show_tips:
-                    _cat, _name, desc = help_for(key)
-                    if desc:
-                        b.setToolTip(desc)
+                _cat, _name, desc = help_for(key)
+                if show_tips and desc:
+                    b.setToolTip(desc)
                 b.clicked.connect(
                     lambda _=False, i=index: self.stack.setCurrentIndex(i))
                 group.addButton(b)
                 self.nav_buttons.append(b)
                 self.section_items[section].append(b)
+                self.nav_meta.append({
+                    "button": b, "label": label, "key": key,
+                    "section": section, "desc": desc or "", "cat": _cat or "",
+                })
                 col.addWidget(b)
                 index += 1
             col.addSpacing(4)
@@ -326,6 +337,10 @@ class MainWindow(QMainWindow):
         self._apply_collapsed()
 
     def _apply_collapsed(self) -> None:
+        # если активен поиск — фильтр управляет видимостью
+        if hasattr(self, "nav_search") and self.nav_search.text().strip():
+            self._filter_nav(self.nav_search.text())
+            return
         collapsed = self._collapsed_set()
         for name, buttons in self.section_items.items():
             is_collapsed = name in collapsed
@@ -333,10 +348,36 @@ class MainWindow(QMainWindow):
                 b.setVisible(not is_collapsed)
             header = self.section_headers.get(name)
             if header is not None:
+                header.setVisible(True)
                 arrow = "+" if is_collapsed else "−"
                 header.setText(f"{arrow}  {name.upper()}")
                 header.setToolTip("Развернуть раздел" if is_collapsed
                                   else "Свернуть раздел")
+
+    def _filter_nav(self, text: str = "") -> None:
+        q = (text or "").strip().lower()
+        if not q:
+            # сброс фильтра — вернуть обычное состояние сворачивания
+            for header in self.section_headers.values():
+                header.setVisible(True)
+            self._apply_collapsed()
+            return
+        for name, header in self.section_headers.items():
+            has_match = False
+            for meta in getattr(self, "nav_meta", []):
+                if meta["section"] != name:
+                    continue
+                hay = " ".join([
+                    meta.get("label", ""), meta.get("key", ""),
+                    meta.get("desc", ""), meta.get("cat", ""),
+                ]).lower()
+                match = q in hay
+                meta["button"].setVisible(match)
+                if match:
+                    has_match = True
+            header.setVisible(has_match)
+            header.setText(f"−  {name.upper()}")
+            header.setToolTip("Результаты поиска")
 
     # ---------------------------------------------------------------- навигация
     def _goto(self, key: str) -> None:

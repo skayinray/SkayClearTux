@@ -95,17 +95,20 @@ def mix(a: str, b: str, t: float) -> str:
 
 
 def build_qss(c: dict[str, str]) -> str:
-    bg_top = shade(c["bg"], 1.12)
-    bg_bot = shade(c["bg"], 0.88)
-    side_top = shade(c["sidebar"], 1.08)
-    side_bot = shade(c["sidebar"], 0.88)
-    card_top = shade(c["card"], 1.08)
-    card_bot = shade(c["card"], 0.93)
-    acc_top = shade(c["accent"], 1.22)
-    acc_bot = shade(c["accent"], 0.82)
-    hover_bg = mix(c["hover"], c["accent"], 0.10)
+    bg_top = shade(c["bg"], 1.10)
+    bg_mid = c["bg"]
+    bg_bot = shade(c["bg"], 0.90)
+    side_top = shade(c["sidebar"], 1.06)
+    side_bot = shade(c["sidebar"], 0.90)
+    card_top = shade(c["card"], 1.06)
+    card_bot = shade(c["card"], 0.95)
+    acc_top = shade(c["accent"], 1.18)
+    acc_bot = shade(c["accent"], 0.86)
+    hover_bg = mix(c["hover"], c["accent"], 0.12)
     dark = c["accent_text"]
-    border_soft = mix(c["border"], c["accent"], 0.12)
+    border_soft = mix(c["border"], c["accent"], 0.10)
+    input_bg = mix(c["card2"], c["bg"], 0.18)
+    subtle = mix(c["text"], c["bg"], 0.06)
     return f"""
 * {{
     font-family: "Inter", "Noto Sans", "Ad Sans", "DejaVu Sans", sans-serif;
@@ -117,30 +120,30 @@ QWidget {{
 }}
 QMainWindow, QDialog {{ background-color: {c['bg']}; }}
 #Root {{
-    background: qlineargradient(x1:0, y1:0, x2:0.35, y2:1,
-        stop:0 {bg_top}, stop:0.45 {c['bg']}, stop:1 {bg_bot});
+    background: qlineargradient(x1:0, y1:0, x2:0.3, y2:1,
+        stop:0 {bg_top}, stop:0.45 {bg_mid}, stop:1 {bg_bot});
 }}
 QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
 
 /* --- боковая панель --- */
 #Sidebar {{
-    background: qlineargradient(x1:0, y1:0, x2:0.2, y2:1,
+    background: qlineargradient(x1:0, y1:0, x2:0.15, y2:1,
         stop:0 {side_top}, stop:1 {side_bot});
     border-right: 1px solid {border_soft};
 }}
-#BrandTitle {{ font-size: 20px; font-weight: 800; color: {c['text']}; letter-spacing: 0.2px; }}
+#BrandTitle {{ font-size: 20px; font-weight: 800; color: {c['text']}; letter-spacing: 0.3px; }}
 #BrandSub {{ font-size: 11px; color: {c['dim']}; }}
 QPushButton#NavSection {{
     text-align: left;
     background: transparent;
     border: none;
-    font-size: 10px; font-weight: 800; color: {c['dim']};
-    letter-spacing: 1.6px; padding: 12px 6px 4px 6px;
+    font-size: 10px; font-weight: 800; color: {mix(c['dim'], c['accent'], 0.15)};
+    letter-spacing: 1.8px; padding: 14px 6px 4px 6px;
 }}
 QPushButton#NavSection:hover {{ color: {c['accent']}; }}
 
 QPushButton#Help {{
-    background: {c['card2']};
+    background: {mix(c['card2'], c['accent'], 0.06)};
     border: 1px solid {c['border']};
     border-radius: 12px;
     padding: 0px;
@@ -153,54 +156,52 @@ QPushButton#Nav {{
     text-align: left;
     padding: 10px 14px;
     border: 1px solid transparent;
-    border-left: 3px solid transparent;
     border-radius: 12px;
-    color: {c['dim']};
+    color: {mix(c['dim'], c['text'], 0.25)};
     font-size: 14px;
     font-weight: 600;
 }}
 QPushButton#Nav:hover {{
     background-color: {hover_bg};
     color: {c['text']};
-    border-color: {mix(c['border'], c['accent'], 0.18)};
+    border-color: {mix(c['border'], c['accent'], 0.20)};
 }}
 QPushButton#Nav:checked {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {mix(c['accent'], c['card'], 0.18)}, stop:1 {mix(c['accent'], c['card2'], 0.32)});
+        stop:0 {mix(c['accent'], c['card'], 0.22)}, stop:1 {mix(c['accent'], c['card2'], 0.36)});
     color: {c['text']};
-    border: 1px solid {mix(c['accent'], c['border'], 0.35)};
-    border-left: 3px solid {c['accent']};
+    border: 1px solid {mix(c['accent'], c['border'], 0.40)};
     font-weight: 700;
 }}
 
 /* --- карточки --- */
 #Card {{
-    background: qlineargradient(x1:0, y1:0, x2:0.4, y2:1,
+    background: qlineargradient(x1:0, y1:0, x2:0.35, y2:1,
         stop:0 {card_top}, stop:1 {card_bot});
-    border: 1px solid {mix(c['border'], c['accent'], 0.08)};
-    border-top-color: {mix(c['border'], c['text'], 0.06)};
-    border-radius: 18px;
+    border: 1px solid {border_soft};
+    border-top-color: {subtle};
+    border-radius: 20px;
 }}
 #Hero {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {mix(c['accent'], c['card'], 0.22)}, stop:0.55 {card_top}, stop:1 {card_bot});
-    border: 1px solid {mix(c['accent'], c['border'], 0.30)};
-    border-radius: 22px;
+        stop:0 {mix(c['accent'], c['card'], 0.20)}, stop:0.5 {card_top}, stop:1 {mix(c['card2'], c['bg'], 0.25)});
+    border: 1px solid {mix(c['accent'], c['border'], 0.28)};
+    border-radius: 24px;
 }}
 #CardTitle {{ font-size: 15px; font-weight: 700; color: {c['text']}; }}
 #CardSub {{ font-size: 12px; color: {c['dim']}; }}
-#H1 {{ font-size: 28px; font-weight: 800; color: {c['text']}; }}
+#H1 {{ font-size: 30px; font-weight: 800; color: {c['text']}; letter-spacing: 0.2px; }}
 #H2 {{ font-size: 19px; font-weight: 700; color: {c['text']}; }}
 #Dim {{ color: {c['dim']}; }}
 #Metric {{ font-size: 30px; font-weight: 800; color: {c['accent']}; }}
 #HeroMetric {{ font-size: 34px; font-weight: 900; color: {c['accent']}; }}
 #MetricLabel {{ font-size: 12px; color: {c['dim']}; }}
 #Badge {{
-    background: {mix(c['accent'], c['card2'], 0.18)};
+    background: {mix(c['accent'], c['card2'], 0.16)};
     color: {c['text']};
-    border: 1px solid {mix(c['accent'], c['border'], 0.35)};
-    border-radius: 10px;
-    padding: 4px 10px;
+    border: 1px solid {mix(c['accent'], c['border'], 0.30)};
+    border-radius: 999px;
+    padding: 5px 12px;
     font-weight: 700;
     font-size: 12px;
 }}
@@ -209,61 +210,67 @@ QPushButton#Nav:checked {{
 /* --- кнопки --- */
 QPushButton {{
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {shade(c['card2'], 1.10)}, stop:1 {c['card2']});
+        stop:0 {shade(c['card2'], 1.08)}, stop:1 {shade(c['card2'], 0.98)});
     color: {c['text']};
     border: 1px solid {c['border']};
-    border-radius: 11px;
+    border-radius: 12px;
     padding: 9px 16px;
     font-weight: 600;
 }}
 QPushButton:hover {{
     background: {hover_bg};
-    border-color: {mix(c['accent'], c['border'], 0.55)};
+    border-color: {mix(c['accent'], c['border'], 0.50)};
 }}
-QPushButton:pressed {{ background: {c['border']}; }}
+QPushButton:pressed {{ background: {mix(c['border'], c['card'], 0.5)}; }}
 QPushButton:disabled {{ color: {c['dim']}; border-color: {c['border']}; background: {shade(c['card2'], 0.98)}; }}
 QPushButton#Accent {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 {acc_top}, stop:1 {acc_bot});
     color: {dark};
-    border: 1px solid {mix(c['accent'], c['border'], 0.2)};
+    border: 1px solid {mix(c['accent'], c['border'], 0.18)};
     font-weight: 700;
 }}
 QPushButton#Accent:hover {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {shade(c['accent'], 1.28)}, stop:1 {shade(c['accent'], 0.92)});
+        stop:0 {shade(c['accent'], 1.24)}, stop:1 {shade(c['accent'], 0.94)});
 }}
 QPushButton#Danger {{
-    background: {mix(c['danger'], c['card'], 0.12)};
+    background: {mix(c['danger'], c['card'], 0.10)};
     color: {c['danger']};
-    border: 1px solid {mix(c['danger'], c['border'], 0.45)};
+    border: 1px solid {mix(c['danger'], c['border'], 0.40)};
 }}
-QPushButton#Danger:hover {{ background: {mix(c['danger'], c['card'], 0.20)}; }}
+QPushButton#Danger:hover {{ background: {mix(c['danger'], c['card'], 0.18)}; }}
 
 /* --- поля, комбо, чекбоксы --- */
 QComboBox, QLineEdit, QSpinBox, QPlainTextEdit, QTextEdit {{
-    background-color: {shade(c['card2'], 0.98)};
+    background-color: {input_bg};
     border: 1px solid {c['border']};
-    border-radius: 11px;
-    padding: 7px 12px;
+    border-radius: 12px;
+    padding: 8px 12px;
     color: {c['text']};
+    selection-background-color: {mix(c['accent'], c['card'], 0.45)};
+    selection-color: {c['text']};
 }}
-QComboBox:hover, QLineEdit:hover, QSpinBox:hover,
+QComboBox:hover, QLineEdit:hover, QSpinBox:hover {{
+    border-color: {mix(c['accent'], c['border'], 0.40)};
+}}
 QComboBox:focus, QLineEdit:focus, QSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
-    border-color: {mix(c['accent'], c['border'], 0.6)};
+    border: 1px solid {mix(c['accent'], c['border'], 0.65)};
+    background-color: {mix(input_bg, c['card'], 0.25)};
 }}
 QComboBox::drop-down {{ border: none; width: 26px; }}
 QComboBox QAbstractItemView {{
     background-color: {c['card']};
     border: 1px solid {c['border']};
-    selection-background-color: {c['accent']};
-    selection-color: {dark};
+    selection-background-color: {mix(c['accent'], c['card'], 0.45)};
+    selection-color: {c['text']};
     padding: 4px;
+    border-radius: 10px;
 }}
 QCheckBox {{ spacing: 9px; color: {c['text']}; }}
 QCheckBox::indicator {{
     width: 20px; height: 20px; border-radius: 7px;
-    border: 1px solid {c['border']}; background-color: {c['card2']};
+    border: 1px solid {c['border']}; background-color: {input_bg};
 }}
 QCheckBox::indicator:hover {{ border-color: {c['accent']}; }}
 QCheckBox::indicator:checked {{
@@ -274,29 +281,29 @@ QCheckBox::indicator:checked {{
 
 /* --- прогресс --- */
 QProgressBar {{
-    background-color: {shade(c['card2'], 0.92)};
+    background-color: {shade(c['card2'], 0.94)};
     border: 1px solid {c['border']};
-    border-radius: 8px; height: 16px; text-align: center;
+    border-radius: 9px; height: 16px; text-align: center;
     color: {c['text']}; font-size: 11px;
 }}
 QProgressBar::chunk {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 {acc_bot}, stop:0.5 {c['accent']}, stop:1 {acc_top});
-    border-radius: 7px;
+    border-radius: 8px;
 }}
 
 /* --- таблицы --- */
 QTableWidget {{
     background-color: {c['card']};
-    alternate-background-color: {shade(c['card'], 0.96)};
+    alternate-background-color: {mix(c['card'], c['card2'], 0.35)};
     border: 1px solid {c['border']};
     border-radius: 14px;
-    gridline-color: {shade(c['border'], 0.85)};
-    selection-background-color: {mix(c['accent'], c['card'], 0.35)};
+    gridline-color: {mix(c['border'], c['bg'], 0.35)};
+    selection-background-color: {mix(c['accent'], c['card'], 0.32)};
     selection-color: {c['text']};
 }}
 QHeaderView::section {{
-    background-color: {shade(c['card'], 1.08)};
+    background-color: {mix(c['card2'], c['card'], 0.35)};
     color: {c['dim']};
     border: none;
     border-bottom: 1px solid {c['border']};
@@ -305,24 +312,24 @@ QHeaderView::section {{
 }}
 
 /* --- прокрутка --- */
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px 2px; }}
 QScrollBar::handle:vertical {{
-    background: {mix(c['border'], c['accent'], 0.15)};
-    border-radius: 5px; min-height: 30px;
+    background: {mix(c['border'], c['accent'], 0.12)};
+    border-radius: 5px; min-height: 28px;
 }}
-QScrollBar::handle:vertical:hover {{ background: {mix(c['accent'], c['border'], 0.45)}; }}
+QScrollBar::handle:vertical:hover {{ background: {mix(c['accent'], c['border'], 0.42)}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px 4px; }}
 QScrollBar::handle:horizontal {{
-    background: {mix(c['border'], c['accent'], 0.15)};
-    border-radius: 5px; min-width: 30px;
+    background: {mix(c['border'], c['accent'], 0.12)};
+    border-radius: 5px; min-width: 28px;
 }}
-QScrollBar::handle:horizontal:hover {{ background: {mix(c['accent'], c['border'], 0.45)}; }}
+QScrollBar::handle:horizontal:hover {{ background: {mix(c['accent'], c['border'], 0.42)}; }}
 
 QToolTip {{
     background-color: {c['card']};
     color: {c['text']};
-    border: 1px solid {mix(c['accent'], c['border'], 0.35)};
+    border: 1px solid {mix(c['accent'], c['border'], 0.30)};
     padding: 6px 8px;
     border-radius: 8px;
 }}
@@ -332,9 +339,9 @@ QListWidget {{
     border-radius: 12px;
     padding: 4px;
 }}
-QListWidget::item {{ padding: 6px 8px; border-radius: 8px; }}
+QListWidget::item {{ padding: 7px 8px; border-radius: 8px; }}
 QListWidget::item:selected {{
-    background-color: {mix(c['accent'], c['card'], 0.30)};
+    background-color: {mix(c['accent'], c['card'], 0.28)};
     color: {c['text']};
 }}
 
@@ -346,7 +353,7 @@ QTabWidget::pane {{
     top: -1px;
 }}
 QTabBar::tab {{
-    background: {c['card2']};
+    background: {mix(c['card2'], c['bg'], 0.25)};
     color: {c['dim']};
     border: 1px solid {c['border']};
     border-bottom: none;
@@ -359,15 +366,15 @@ QTabBar::tab {{
 QTabBar::tab:selected {{
     background: {c['card']};
     color: {c['accent']};
-    border-color: {mix(c['accent'], c['border'], 0.35)};
+    border-color: {mix(c['accent'], c['border'], 0.30)};
 }}
 QTabBar::tab:hover {{ color: {c['text']}; }}
 
 /* --- баннер обновления --- */
 #Banner {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {mix(c['accent'], c['card'], 0.28)}, stop:1 {c['card']});
-    border-bottom: 1px solid {mix(c['accent'], c['border'], 0.3)};
+        stop:0 {mix(c['accent'], c['card'], 0.24)}, stop:1 {c['card']});
+    border-bottom: 1px solid {mix(c['accent'], c['border'], 0.28)};
 }}
 #BannerText {{ font-size: 13px; font-weight: 600; color: {c['text']}; }}
 
@@ -375,7 +382,7 @@ QTabBar::tab:hover {{ color: {c['text']}; }}
 #Palette {{ background-color: {c['bg']}; }}
 #PaletteList {{
     background-color: {c['card']};
-    border: 1px solid {mix(c['accent'], c['border'], 0.3)};
+    border: 1px solid {mix(c['accent'], c['border'], 0.28)};
     border-radius: 14px;
     padding: 6px;
     font-size: 14px;
@@ -383,9 +390,9 @@ QTabBar::tab:hover {{ color: {c['text']}; }}
 #PaletteList::item {{ padding: 9px 12px; border-radius: 8px; color: {c['text']}; }}
 #PaletteList::item:selected {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {mix(c['accent'], c['card'], 0.25)}, stop:1 {mix(c['accent'], c['card2'], 0.35)});
+        stop:0 {mix(c['accent'], c['card'], 0.22)}, stop:1 {mix(c['accent'], c['card2'], 0.32)});
     color: {c['text']};
-    border: 1px solid {mix(c['accent'], c['border'], 0.35)};
+    border: 1px solid {mix(c['accent'], c['border'], 0.30)};
 }}
 
 /* --- меню трея и контекстные меню --- */
@@ -397,7 +404,7 @@ QMenu {{
 }}
 QMenu::item {{ padding: 7px 22px; border-radius: 8px; color: {c['text']}; }}
 QMenu::item:selected {{
-    background-color: {mix(c['accent'], c['card'], 0.30)};
+    background-color: {mix(c['accent'], c['card'], 0.28)};
     color: {c['text']};
 }}
 QMenu::separator {{ height: 1px; background: {c['border']}; margin: 5px 8px; }}

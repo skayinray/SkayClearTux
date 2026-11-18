@@ -2,7 +2,7 @@
 # Сборка .deb-пакета SkayClearTux (Debian, Ubuntu, Mint и др.).
 #
 # Требуется: собранный бандл PyInstaller в dist/SkayClearTux и dpkg-deb.
-#   VERSION=1.5.0 bash packaging/01-linux/make_deb.sh
+#   VERSION=1.5.1 bash packaging/01-linux/make_deb.sh
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

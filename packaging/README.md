@@ -11,9 +11,9 @@ AppImage/`.deb`/`.rpm` (Linux), `.zip` с `.exe` (Windows) и `.dmg` (macOS).
 
 | Платформа | Файл релиза | Как запустить |
 |-----------|-------------|---------------|
-| Linux (любой) | `SkayClearTux-1.5.0-x86_64.AppImage` | `chmod +x` и запустить |
-| Debian/Ubuntu | `SkayClearTux-1.5.0-amd64.deb` | `sudo apt install ./SkayClearTux-1.5.0-amd64.deb` |
-| Fedora/RHEL/openSUSE | `SkayClearTux-1.5.0-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.5.0-x86_64.rpm` |
+| Linux (любой) | `SkayClearTux-1.5.1-x86_64.AppImage` | `chmod +x` и запустить |
+| Debian/Ubuntu | `SkayClearTux-1.5.1-amd64.deb` | `sudo apt install ./SkayClearTux-1.5.1-amd64.deb` |
+| Fedora/RHEL/openSUSE | `SkayClearTux-1.5.1-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.5.1-x86_64.rpm` |
 | Windows | `SkayClearTux-windows.zip` | распаковать, запустить `SkayClearTux.exe` |
 | macOS | `SkayClearTux.dmg` | открыть образ, перетащить в «Программы» |
 
@@ -53,13 +53,13 @@ pyinstaller --noconfirm --clean --windowed \
     --add-data "skaycleartux/assets:skaycleartux/assets" \
     --icon skaycleartux/assets/tux.png \
     --exclude-module tkinter SkayClearTux.py
-VERSION=1.5.0 bash packaging/01-linux/make_appimage.sh   # AppImage
-VERSION=1.5.0 bash packaging/01-linux/make_deb.sh        # .deb (нужен dpkg-deb)
-VERSION=1.5.0 bash packaging/01-linux/make_rpm.sh        # .rpm (нужен rpmbuild)
+VERSION=1.5.1 bash packaging/01-linux/make_appimage.sh   # AppImage
+VERSION=1.5.1 bash packaging/01-linux/make_deb.sh        # .deb (нужен dpkg-deb)
+VERSION=1.5.1 bash packaging/01-linux/make_rpm.sh        # .rpm (нужен rpmbuild)
 ```
 
-Готовые файлы: `build/SkayClearTux-1.5.0-x86_64.AppImage`,
-`build/SkayClearTux-1.5.0-amd64.deb`, `build/SkayClearTux-1.5.0-x86_64.rpm`.
+Готовые файлы: `build/SkayClearTux-1.5.1-x86_64.AppImage`,
+`build/SkayClearTux-1.5.1-amd64.deb`, `build/SkayClearTux-1.5.1-x86_64.rpm`.
 
 ### Windows — `.zip` с `.exe`
 
@@ -76,7 +76,7 @@ powershell -ExecutionPolicy Bypass -File packaging\02-windows\build.ps1
 bash packaging/03-macos/build.sh
 ```
 
-Готово: `dist/SkayClearTux.app` и `dist/SkayClearTux-1.5.0.dmg`.
+Готово: `dist/SkayClearTux.app` и `dist/SkayClearTux-1.5.1.dmg`.
 
 ---
 
@@ -91,8 +91,8 @@ bash packaging/03-macos/build.sh
 
 ```json
 {
-  "version": "1.5.0",
-  "url": "https://github.com/skayinray/SkayClearTux/releases/download/v1.5.0/SkayClearTux-1.5.0-x86_64.AppImage",
+  "version": "1.5.1",
+  "url": "https://github.com/skayinray/SkayClearTux/releases/download/v1.5.1/SkayClearTux-1.5.1-x86_64.AppImage",
   "sha256": "....",
   "notes": "Что нового в этой версии",
   "published": "2026-11-16"
@@ -103,14 +103,14 @@ bash packaging/03-macos/build.sh
 `sha256` так:
 
 ```bash
-sha256sum SkayClearTux-1.5.0-x86_64.AppImage
+sha256sum SkayClearTux-1.5.1-x86_64.AppImage
 ```
 
 CI из [`.github/workflows/build.yml`](../.github/workflows/build.yml) собирает
 все три сборки, публикует их в GitHub Releases и **автоматически создаёт
 `latest.json`** — достаточно указать ссылку на него в настройках приложения.
 
-> Релиз запускается по тегу: `git tag v1.5.0 && git push --tags`.
+> Релиз запускается по тегу: `git tag v1.5.1 && git push --tags`.
 
 ---
 

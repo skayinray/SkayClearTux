@@ -7,11 +7,12 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QMessageBox, QProgressBar, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QFileDialog, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QMessageBox, QProgressBar,
+                               QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from . import cleaner
+from . import report
 from . import system_tools as st
 from . import themes as themes_mod
 from . import __version__
@@ -93,6 +94,45 @@ class DashboardPage(QWidget):
         self.m_bat = self._metric(grid, 2, 1, "Батарея", "—")
         root.addLayout(grid)
 
+        # здоровье системы + быстрые действия
+        actions = QHBoxLayout()
+        actions.setSpacing(14)
+
+        health = card()
+        hl = QVBoxLayout(health)
+        hl.setContentsMargins(18, 16, 18, 16)
+        ht = QLabel("Здоровье системы"); ht.setObjectName("CardTitle"); hl.addWidget(ht)
+        self.health_score = QLabel("— / 100")
+        self.health_score.setObjectName("Metric")
+        hl.addWidget(self.health_score)
+        self.health_level = QLabel("")
+        self.health_level.setObjectName("CardSub")
+        hl.addWidget(self.health_level)
+        self.health_tips = QLabel("")
+        self.health_tips.setObjectName("CardSub")
+        self.health_tips.setWordWrap(True)
+        self.health_tips.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        hl.addWidget(self.health_tips)
+        actions.addWidget(health, 2)
+
+        quick = card()
+        ql = QVBoxLayout(quick)
+        ql.setContentsMargins(18, 16, 18, 16)
+        qt = QLabel("Быстрые действия"); qt.setObjectName("CardTitle"); ql.addWidget(qt)
+        qsub = QLabel("Полезные операции в один клик.")
+        qsub.setObjectName("CardSub"); qsub.setWordWrap(True); ql.addWidget(qsub)
+        self.btn_report = QPushButton("Сохранить отчёт о системе (HTML)")
+        self.btn_report.setObjectName("Accent")
+        self.btn_report.clicked.connect(self._export_report)
+        ql.addWidget(self.btn_report)
+        self.report_status = QLabel("")
+        self.report_status.setObjectName("Dim")
+        self.report_status.setWordWrap(True)
+        ql.addWidget(self.report_status)
+        ql.addStretch(1)
+        actions.addWidget(quick, 1)
+        root.addLayout(actions)
+
         info = card()
         il = QVBoxLayout(info)
         il.setContentsMargins(18, 16, 18, 16)
@@ -103,6 +143,7 @@ class DashboardPage(QWidget):
         root.addWidget(info)
         root.addStretch(1)
 
+        self._report_worker = None
         self._refresh_static()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh_live)
@@ -151,8 +192,50 @@ class DashboardPage(QWidget):
                 self.m_bat.setToolTip(f"{bat.get('status', '')}")
             else:
                 self.m_bat.setText("—")
+            self._update_health()
         except Exception:  # noqa: BLE001 — не даём дашборду уронить программу
             pass
+
+    def _update_health(self) -> None:
+        try:
+            h = report.compute_health()
+        except Exception:  # noqa: BLE001
+            return
+        self.health_score.setText(f"{h['score']} / 100")
+        self.health_score.setStyleSheet(f"color: {h['color']}; font-weight: 800;")
+        self.health_level.setText(h["level"])
+        tips = h.get("tips") or []
+        self.health_tips.setText(" • ".join(tips[:3]))
+
+    def _export_report(self) -> None:
+        if self._report_worker and self._report_worker.isRunning():
+            return
+        default = str(report.default_report_path())
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Сохранить отчёт о системе", default,
+            "HTML-отчёт (*.html);;Все файлы (*)")
+        if not path:
+            return
+        self.btn_report.setEnabled(False)
+        self.report_status.setText("Формирую отчёт… (сбор диагностики и оборудования)")
+
+        def job():
+            html = report.build_report_html()
+            Path(path).write_text(html, encoding="utf-8")
+            return path
+
+        self._report_worker = Worker(job)
+        self._report_worker.progress.connect(self.report_status.setText)
+
+        def done(result):
+            self.btn_report.setEnabled(True)
+            if isinstance(result, str) and result:
+                self.report_status.setText(f"Отчёт сохранён: {result}")
+            else:
+                self.report_status.setText("Не удалось сохранить отчёт.")
+
+        self._report_worker.done.connect(done)
+        self._report_worker.start()
 
 
 # --------------------------------------------------------------------------- #

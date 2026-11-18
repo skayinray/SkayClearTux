@@ -23,7 +23,7 @@ body:
     attributes:
       label: Версия SkayClearTux
       description: Видна в разделе «Настройка → О программе»
-      placeholder: "например 1.3.2"
+      placeholder: "например 1.3.3"
     validations:
       required: true
   - type: dropdown

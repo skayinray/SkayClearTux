@@ -28,11 +28,21 @@ OP_PONG = 4
 
 
 def resolve_client_id(configured: str | None = None) -> str:
-    """ID приложения: явно заданный в настройках или встроенный по умолчанию."""
+    """ID приложения: из настроек, переменных окружения или встроенный.
+
+    Порядок: явный (настройки) → SKAYCLEARTUX_DISCORD_CLIENT_ID →
+    DISCORD_CLIENT_ID → BUILTIN_CLIENT_ID. Это позволяет включить активность
+    «из коробки» без правки настроек в UI (например, через окружение/сборку).
+    """
     value = str(configured or "").strip()
     if value.isdigit():
         return value
-    return BUILTIN_CLIENT_ID if BUILTIN_CLIENT_ID.isdigit() else ""
+    for env in ("SKAYCLEARTUX_DISCORD_CLIENT_ID", "DISCORD_CLIENT_ID"):
+        env_val = str(os.environ.get(env) or "").strip()
+        if env_val.isdigit():
+            return env_val
+    builtin = str(BUILTIN_CLIENT_ID or "").strip()
+    return builtin if builtin.isdigit() else ""
 
 
 def _socket_candidates() -> list[str]:
@@ -289,6 +299,19 @@ class DiscordPresence:
     def available(self) -> bool:
         return self.client_id.isdigit()
 
+    @property
+    def connected(self) -> bool:
+        return bool(self._last_ok and self._ipc is not None and self._ipc.connected)
+
+    def status_text(self) -> str:
+        if not self.available:
+            return "не настроен (нужен Application ID)"
+        if self._thread is None or not self._thread.is_alive():
+            return "выключено"
+        if self.connected:
+            return "подключено к Discord"
+        return "ожидание Discord… (запустите Discord и проверьте ID)"
+
     def start(self) -> None:
         if not self.available:
             return
@@ -304,6 +327,7 @@ class DiscordPresence:
             self._ipc.clear()
             self._ipc.close()
             self._ipc = None
+        self._last_ok = False
 
     def update(self, details: str, state: str) -> None:
         if not self.available:
@@ -331,6 +355,8 @@ class DiscordPresence:
                 details=details,
                 state=state,
                 timestamps={"start": self._start_ts},
+                assets={"large_image": "tux", "large_text": "SkayClearTux"},
+                buttons=[{"label": "SkayClearTux", "url": "https://github.com/skayinray/SkayClearTux"}],
             )
             self._last_ok = ok
             if ok:

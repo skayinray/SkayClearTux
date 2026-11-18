@@ -1,13 +1,16 @@
 """Страница настроек SkayClearTux."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+import webbrowser
+
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from . import themes as themes_mod
 from . import __version__
+from .discord_rpc import resolve_client_id
 from .settings import CREATOR
 
 # порядок ключей страниц для «стартовой страницы»
@@ -392,7 +395,7 @@ class SettingsPage(QWidget):
         self.chk_discord = QCheckBox("Показывать, что я в SkayClearTux")
         self.chk_discord.setChecked(self.settings.get_bool("discord/enabled"))
         self.chk_discord.toggled.connect(
-            lambda v: self._save("discord/enabled", v))
+            lambda v: (self._save("discord/enabled", v), self._refresh_discord_status()))
         lay.addWidget(self.chk_discord)
 
         self.chk_discord_page = QCheckBox("Показывать текущий раздел программы")
@@ -405,20 +408,59 @@ class SettingsPage(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel("Application ID"))
         self.edit_discord_id = QLineEdit(str(self.settings.get("discord/client_id") or ""))
-        self.edit_discord_id.setPlaceholderText("числовой ID приложения Discord")
+        self.edit_discord_id.setPlaceholderText("числовой ID (или переменная окружения)")
         self.edit_discord_id.editingFinished.connect(self._save_discord_id)
         row.addWidget(self.edit_discord_id, 1)
         lay.addLayout(row)
 
+        row2 = QHBoxLayout()
+        self.lbl_discord_status = QLabel("")
+        self.lbl_discord_status.setObjectName("CardSub")
+        self.lbl_discord_status.setWordWrap(True)
+        row2.addWidget(self.lbl_discord_status, 1)
+        btn_portal = QPushButton("Открыть Developer Portal")
+        btn_portal.clicked.connect(
+            lambda: webbrowser.open("https://discord.com/developers/applications"))
+        row2.addWidget(btn_portal)
+        lay.addLayout(row2)
+
         hint = QLabel(
-            "Статус «играет в SkayClearTux» виден, пока программа открыта. "
-            "Укажите Application ID своего приложения с "
-            "discord.com/developers/applications — после этого активность "
-            "появится в Discord автоматически (включая Windows, macOS и Linux).")
+            "Активность показывается, пока SkayClearTux открыт и запущен Discord. "
+            "Нужен Application ID (свой или встроенный в сборку). Можно задать ID "
+            "здесь или через переменную окружения SKAYCLEARTUX_DISCORD_CLIENT_ID — "
+            "тогда активность работает без ручного ввода в настройках.")
         hint.setObjectName("CardSub")
         hint.setWordWrap(True)
         lay.addWidget(hint)
+
+        self._discord_timer = QTimer(self)
+        self._discord_timer.timeout.connect(self._refresh_discord_status)
+        self._discord_timer.start(3000)
+        self._refresh_discord_status()
         return c
+
+    def _refresh_discord_status(self) -> None:
+        if not hasattr(self, "lbl_discord_status"):
+            return
+        cid = resolve_client_id(self.settings.get("discord/client_id"))
+        win = self.window()
+        presence = getattr(win, "presence", None)
+        if not self.settings.get_bool("discord/enabled"):
+            self.lbl_discord_status.setText("Статус: выключено в настройках.")
+            return
+        if not cid:
+            self.lbl_discord_status.setText(
+                "Статус: нет Application ID. Укажите ID (или задайте "
+                "SKAYCLEARTUX_DISCORD_CLIENT_ID) — после этого активность "
+                "подключится автоматически.")
+            return
+        if presence is not None and getattr(presence, "client_id", "") == cid:
+            self.lbl_discord_status.setText(f"Статус: {presence.status_text()}  (ID: {cid})")
+        else:
+            self.lbl_discord_status.setText(
+                f"Статус: ID задан ({cid}), ожидается подключение… "
+                "Если Discord запущен, активность появится в течение нескольких секунд.")
+
 
     def _update_card(self) -> QFrame:
         c = card()
@@ -464,6 +506,7 @@ class SettingsPage(QWidget):
 
     def _save_discord_id(self) -> None:
         self._save("discord/client_id", self.edit_discord_id.text().strip())
+        self._refresh_discord_status()
 
     def _creator_card(self) -> QFrame:
         c = card()

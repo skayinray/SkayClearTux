@@ -8,7 +8,7 @@ from PySide6.QtCore import (QEasingCurve, QRectF, QSize, Qt, QThread,
                             QVariantAnimation, Signal)
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
-                               QListWidget, QPushButton, QSizePolicy,
+                               QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
 
 from .chess_engine import Board, sq_name
@@ -46,6 +46,29 @@ class BotThread(QThread):
         except Exception:  # noqa: BLE001
             mv = None
         self.done.emit(self.token, mv)
+
+
+class AnalysisThread(QThread):
+    done = Signal(int, int, object)
+
+    def __init__(self, fen: str, move: tuple[int, int, str], token: int,
+                 move_index: int, depth: int = 2,
+                 time_limit: float | None = 0.35):
+        super().__init__()
+        self.fen = fen
+        self.move = move
+        self.token = token
+        self.move_index = move_index
+        self.depth = depth
+        self.time_limit = time_limit
+
+    def run(self) -> None:
+        try:
+            board = Board(self.fen)
+            result = board.analyze_move(self.move, self.depth, self.time_limit)
+        except Exception:  # noqa: BLE001
+            result = {}
+        self.done.emit(self.token, self.move_index, result)
 
 
 class BoardView(QWidget):
@@ -236,6 +259,8 @@ class ChessPage(QWidget):
         self.settings = settings
         self.human = "w"
         self._thread: BotThread | None = None
+        self._analysis_thread: AnalysisThread | None = None
+        self._analysis_queue: list[tuple[int, str, tuple[int, int, str], str]] = []
         self._mode = "bot"
         self._result_recorded = False
         self._last_delta = 0
@@ -379,6 +404,7 @@ class ChessPage(QWidget):
         self.view.interactive = True
         self._premove_from = None
         self.moves.clear()
+        self._analysis_queue.clear()
         self._result_recorded = False
         self._last_delta = 0
         self._mode = "bot"
@@ -398,13 +424,16 @@ class ChessPage(QWidget):
             return
         self._game_token += 1
         self.view.stop_animation()
+        self._analysis_queue.clear()
         if not g.history:
             return
         g.undo()
-        if g.turn != self.human and g.history:
-            g.undo()
         if self.moves.count():
             self.moves.takeItem(self.moves.count() - 1)
+        if g.turn != self.human and g.history:
+            g.undo()
+            if self.moves.count():
+                self.moves.takeItem(self.moves.count() - 1)
         self.view.selected = None
         self.view.targets = []
         self.view.last_move = None
@@ -495,8 +524,10 @@ class ChessPage(QWidget):
                 promo = dlg.choice if dlg.exec() else "q"
         else:
             promo = options[0][2]
-        g.make_move((frm, to, promo))
-        self._after_move(frm, to)
+        move = (frm, to, promo)
+        fen_before = g.fen()
+        g.make_move(move)
+        self._after_move(frm, to, fen_before, move)
         self._maybe_start_bot_or_premove()
 
     def _maybe_start_bot_or_premove(self) -> None:
@@ -529,8 +560,10 @@ class ChessPage(QWidget):
             promo = options[0][2]
         self.view.premove = None
         self._premove_from = None
-        self.view.game.make_move((frm, to, promo))
-        self._after_move(frm, to)
+        move = (frm, to, promo)
+        fen_before = self.view.game.fen()
+        self.view.game.make_move(move)
+        self._after_move(frm, to, fen_before, move)
         self._maybe_start_bot_or_premove()
 
     def _bot_move(self) -> None:
@@ -589,12 +622,15 @@ class ChessPage(QWidget):
                     # на случай, если движок вернул ход без уточнения превращения
                     if not any(m[2] == promo for m in options):
                         promo = options[0][2]
-                    g.make_move((frm, to, promo))
-                    self._after_move(frm, to)
+                    move = (frm, to, promo)
+                    fen_before = g.fen()
+                    g.make_move(move)
+                    self._after_move(frm, to, fen_before, move)
                     # после хода бота пробуем премув (если теперь ход человека)
                     self._try_premove()
             self._update_status()
             self.view.update()
+            self._start_next_analysis()
         else:
             if mv and g.status()[0] == "play":
                 self.view.hint_move = (mv[0], mv[1])
@@ -604,7 +640,8 @@ class ChessPage(QWidget):
             else:
                 self._update_status()
 
-    def _after_move(self, frm: int, to: int) -> None:
+    def _after_move(self, frm: int, to: int, fen_before: str | None = None,
+                    move: tuple[int, int, str] | None = None) -> None:
         self.view.last_move = (frm, to)
         self.view.hint_move = None
         self.view.selected = None
@@ -612,11 +649,57 @@ class ChessPage(QWidget):
         self._premove_from = None
         if self.settings.get_bool("chess/animate"):
             self.view.animate_move(frm, to, self.settings.get_int("ui/anim_ms") + 60)
-        self.moves.addItem(f"{sq_name(frm)}–{sq_name(to)}")
+        base = f"{sq_name(frm)}–{sq_name(to)}"
+        item = QListWidgetItem(base + "  · анализ…")
+        item.setData(Qt.UserRole, base)
+        self.moves.addItem(item)
         self.moves.scrollToBottom()
+        if fen_before is not None and move is not None:
+            self._queue_analysis(fen_before, move, base)
         self._update_status()
         self._check_game_over()
         self.view.update()
+
+    def _queue_analysis(self, fen_before: str, move: tuple[int, int, str], base: str) -> None:
+        move_index = self.moves.count() - 1
+        self._analysis_queue.append((move_index, fen_before, move, base))
+        self._start_next_analysis()
+
+    def _start_next_analysis(self) -> None:
+        if self._bot_running():
+            return
+        if self._analysis_thread and self._analysis_thread.isRunning():
+            return
+        if not self._analysis_queue:
+            return
+        move_index, fen_before, move, _base = self._analysis_queue.pop(0)
+        depth = 2 if self.LEVELS.get(self.level.currentText(), 2) >= 3 else 2
+        # очень короткий бюджет, чтобы не создавать лаги
+        self._analysis_thread = AnalysisThread(
+            fen_before, move, self._game_token, move_index, depth=depth, time_limit=0.35)
+        self._analysis_thread.done.connect(self._on_analysis_done)
+        self._analysis_thread.start()
+
+    def _on_analysis_done(self, token: int, move_index: int, result) -> None:
+        try:
+            if token != self._game_token:
+                return
+            if move_index < 0 or move_index >= self.moves.count():
+                return
+            item = self.moves.item(move_index)
+            if item is None:
+                return
+            base = str(item.data(Qt.UserRole) or item.text()).split("  ", 1)[0]
+            label = ""
+            if isinstance(result, dict):
+                label = str(result.get("label") or "").strip()
+            if not label:
+                label = "—"
+            item.setText(f"{base}  {label}")
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            self._start_next_analysis()
 
     def _update_status(self) -> None:
         try:

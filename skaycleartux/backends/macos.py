@@ -302,26 +302,72 @@ class MacOSBackend(BaseBackend):
             pass
         return temps, fans
 
-    def memory_info(self) -> tuple[float, float]:
+    def _vm_stat(self) -> tuple[float, dict[str, int], int]:
         try:
             total = int(common.run_out(["sysctl", "-n", "hw.memsize"],
                                        timeout=10)) / (1024 ** 3)
         except (TypeError, ValueError):
-            return 0.0, 0.0
+            return 0.0, {}, 4096
         text = (common.run(["vm_stat"], timeout=10).stdout) or ""
         page_size = 4096
         m = re.search(r"page size of (\d+) bytes", text)
         if m:
             page_size = int(m.group(1))
-
-        def pages(label: str) -> int:
+        vals: dict[str, int] = {}
+        for label in ("Pages free", "Pages inactive", "Pages speculative",
+                      "File-backed pages", "Pages wired down", "Pages active"):
             mm = re.search(rf"{label}:\s+(\d+)", text)
-            return int(mm.group(1)) if mm else 0
+            vals[label] = int(mm.group(1)) if mm else 0
+        return total, vals, page_size
 
-        # Доступно ≈ свободные + неактивные страницы
-        avail = (pages("Pages free") + pages("Pages inactive")) * page_size
+    def memory_info(self) -> tuple[float, float]:
+        total, vals, page_size = self._vm_stat()
+        if total <= 0:
+            return 0.0, 0.0
+        avail = (vals.get("Pages free", 0) + vals.get("Pages inactive", 0)) * page_size
         avail_gb = avail / (1024 ** 3)
         return total, max(0.0, total - avail_gb)
+
+    def memory_details(self) -> dict:
+        total, used = self.memory_info()
+        swap_total = swap_used = 0.0
+        sw = common.run_out(["sysctl", "-n", "vm.swapusage"], timeout=10)
+        # пример: total = 2048.00M  used = 512.00M  free = 1536.00M
+        mt = re.search(r"total = ([\d.]+)M", sw)
+        mu = re.search(r"used = ([\d.]+)M", sw)
+        if mt:
+            swap_total = float(mt.group(1)) / 1024.0
+        if mu:
+            swap_used = float(mu.group(1)) / 1024.0
+        _, vals, page_size = self._vm_stat()
+        cached = (vals.get("File-backed pages", 0) + vals.get("Pages speculative", 0)
+                  ) * page_size / (1024 ** 3)
+        return {
+            "total_gb": float(total or 0.0),
+            "used_gb": float(used or 0.0),
+            "available_gb": max(0.0, float(total or 0.0) - float(used or 0.0)),
+            "percent": (used / total * 100.0) if total > 0 else 0.0,
+            "swap_total_gb": swap_total,
+            "swap_used_gb": swap_used,
+            "cached_gb": cached,
+            "buffers_gb": 0.0,
+            "note": "На macOS очистка памяти доступна через команду purge (если установлена).",
+        }
+
+    def optimize_memory(self) -> tuple[bool, str]:
+        try:
+            common.run(["sync"], timeout=15)
+        except Exception:  # noqa: BLE001
+            pass
+        if common.which("purge"):
+            r = common.run(["purge"], root=True, timeout=60)
+            if r.returncode == 0:
+                return True, ("Память оптимизирована командой purge. "
+                              "Система может на короткое время замедлиться.")
+            return False, ("Не удалось выполнить purge (возможно, нужны права "
+                           "администратора или инструменты разработчика).")
+        return False, ("Команда purge не найдена. На macOS прямое освобождение "
+                       "оперативной памяти ограничено; закройте лишние приложения.")
 
     def load_avg(self) -> tuple[float, float, float]:
         try:

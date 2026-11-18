@@ -16,17 +16,20 @@ def _esc(text: str) -> str:
     return html.escape(str(text or ""), quote=True)
 
 
-def compute_health() -> dict:
+def compute_health(metrics: dict | None = None) -> dict:
     """Лёгкая оценка «здоровья» системы по текущим метрикам.
 
     Возвращает {"score": int, "level": str, "color": str, "tips": [str]}.
     Не выполняет тяжёлых операций (без проверки обновлений/SMART).
+    Можно передать уже собранные метрики, чтобы избежать повторного опроса.
     """
     score = 100
     tips: list[str] = []
+    metrics = metrics or {}
 
     try:
-        total_m, used_m = st.memory_info()
+        mem = metrics.get("memory")
+        total_m, used_m = mem if mem is not None else st.memory_info()
         if total_m > 0:
             mem_pct = used_m / total_m * 100
             if mem_pct >= 92:
@@ -39,7 +42,8 @@ def compute_health() -> dict:
         pass
 
     try:
-        _total_b, free_b, used_pct = st.disk_usage()
+        disk = metrics.get("disk")
+        _total_b, free_b, used_pct = disk if disk is not None else st.disk_usage()
         if used_pct >= 95:
             score -= 30
             tips.append(f"На диске критически мало места (занято {used_pct}%). Освободите место.")
@@ -55,7 +59,8 @@ def compute_health() -> dict:
         pass
 
     try:
-        temps, _fans = st.sensors_info()
+        sensors = metrics.get("sensors")
+        temps, _fans = sensors if sensors is not None else st.sensors_info()
         if temps:
             tmax = max(t for _n, t in temps)
             if tmax >= 90:
@@ -68,18 +73,26 @@ def compute_health() -> dict:
         pass
 
     try:
-        bat = st.battery_info()
+        bat = metrics.get("battery", ...)
+        if bat is ...:
+            bat = st.battery_info()
         if bat:
             cap = bat.get("capacity")
+            try:
+                cap_val = int(str(cap).replace("%", "").strip())
+            except Exception:  # noqa: BLE001
+                cap_val = None
             status = str(bat.get("status", "")).lower()
-            if cap is not None and cap <= 15 and "charg" not in status and "заряд" not in status:
+            if cap_val is not None and cap_val <= 15 and "charg" not in status and "заряд" not in status:
                 score -= 10
-                tips.append(f"Низкий заряд батареи ({cap}%). Подключите питание.")
+                tips.append(f"Низкий заряд батареи ({cap_val}%). Подключите питание.")
     except Exception:  # noqa: BLE001
         pass
 
     try:
-        cpu = st.cpu_percent()
+        cpu = metrics.get("cpu")
+        if cpu is None:
+            cpu = st.cpu_percent()
         if cpu >= 95:
             score -= 10
             tips.append(f"ЦП загружен на {cpu:.0f}% прямо сейчас.")

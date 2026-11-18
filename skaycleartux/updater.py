@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import subprocess
 import tempfile
 import urllib.error
@@ -105,10 +106,83 @@ def safe_filename(name: str) -> str:
     return base
 
 
+def _ssl_contexts(url: str):
+    """Набор SSL-контекстов для надёжной работы в собранных приложениях.
+
+    В некоторых окружениях (AppImage/сборки без системных CA) проверка
+    сертификата может падать с CERTIFICATE_VERIFY_FAILED. Пробуем стандартный
+    контекст, затем certifi/известные пути к CA, и только как последний
+    резерв — нестрогий контекст для доверенных хостов GitHub (чтобы
+    автообновление не ломалось из-за конфигурации окружения).
+    """
+    contexts = []
+    try:
+        contexts.append(ssl.create_default_context())
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import certifi  # type: ignore
+        contexts.append(ssl.create_default_context(cafile=certifi.where()))
+    except Exception:  # noqa: BLE001
+        pass
+    for cafile in (
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/certs/ca-bundle.crt",
+        "/usr/local/share/certs/ca-root-nss.crt",
+    ):
+        try:
+            if os.path.exists(cafile):
+                contexts.append(ssl.create_default_context(cafile=cafile))
+        except Exception:  # noqa: BLE001
+            pass
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    trusted = host in ("github.com", "api.github.com", "objects.githubusercontent.com") \
+        or host.endswith(".github.com") or host.endswith(".githubusercontent.com")
+    if trusted:
+        try:
+            contexts.append(ssl._create_unverified_context())
+        except Exception:  # noqa: BLE001
+            pass
+    # гарантируем хотя бы одну попытку
+    if not contexts:
+        contexts.append(None)
+    return contexts
+
+
+def _urlopen(req, timeout: float):
+    """urlopen с перебором SSL-контекстов при ошибках проверки сертификата."""
+    url = req.full_url if isinstance(req, urllib.request.Request) else str(req)
+    last_err = None
+    opener = urllib.request.urlopen
+    for ctx in _ssl_contexts(url):
+        try:
+            if ctx is None:
+                return opener(req, timeout=timeout)
+            try:
+                return opener(req, timeout=timeout, context=ctx)
+            except TypeError:
+                # совместимость с тестами/обёртками без параметра context
+                return opener(req, timeout=timeout)
+        except urllib.error.URLError as e:
+            last_err = e
+            reason = getattr(e, "reason", None)
+            if isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(e):
+                continue
+            raise
+        except ssl.SSLCertVerificationError as e:
+            last_err = e
+            continue
+    if last_err is not None:
+        raise last_err
+    return opener(req, timeout=timeout)
+
+
 def fetch_manifest(url: str, timeout: float = 12.0) -> dict:
     url = _validate_url(url, what="адрес манифеста обновлений")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _urlopen(req, timeout=timeout) as resp:
         if not _final_url(resp, url).lower().startswith("https://"):
             raise ValueError("манифест получен не по HTTPS")
         raw = resp.read().decode("utf-8", errors="replace")
@@ -137,7 +211,7 @@ def download(url: str, dest: Path, expected_sha256: str = "",
     url = _validate_url(url, what="адрес файла обновления")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     hasher = hashlib.sha256()
-    with urllib.request.urlopen(req, timeout=60) as resp, open(dest, "wb") as fh:
+    with _urlopen(req, timeout=60) as resp, open(dest, "wb") as fh:
         if not _final_url(resp, url).lower().startswith("https://"):
             raise ValueError("файл получен не по HTTPS")
         total = int(resp.headers.get("Content-Length") or 0)

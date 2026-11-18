@@ -522,15 +522,24 @@ class Board:
                 break
         return best
 
-    def best_move(self, depth: int = 2,
-                  time_limit: float | None = None) -> tuple[int, int, str] | None:
+    def search_best(self, depth: int = 2,
+                    time_limit: float | None = None) -> tuple[tuple[int, int, str] | None, int]:
+        """Возвращает (лучший_ход, оценка) с точки зрения стороны, чей ход."""
         moves = self._ordered_moves()
         if not moves:
-            return None
+            if self.in_check(self.turn):
+                return None, -100000
+            return None, 0
         # на малой глубине добавим чуть разнообразия
         if depth <= 1 and len(moves) > 1:
             random.shuffle(moves[: min(4, len(moves))])
-            return moves[0]
+            mv = moves[0]
+            self.make_move(mv)
+            try:
+                val = -self.negamax(0, -10**9, 10**9)
+            finally:
+                self.undo()
+            return mv, val
 
         deadline = (time.monotonic() + max(0.05, float(time_limit))
                     ) if time_limit is not None else None
@@ -570,4 +579,64 @@ class Board:
             # найден мат — дальше искать бессмысленно
             if best_val >= 90000:
                 break
-        return best_move
+        return best_move, best_val
+
+    def best_move(self, depth: int = 2,
+                  time_limit: float | None = None) -> tuple[int, int, str] | None:
+        mv, _score = self.search_best(depth, time_limit)
+        return mv
+
+    def analyze_move(self, move: tuple[int, int, str], depth: int = 2,
+                     time_limit: float | None = None) -> dict:
+        """Оценивает качество хода для стороны, делающей ход в текущей позиции."""
+        mover = self.turn
+        # оценка позиции до хода (для отображения/эвристик)
+        try:
+            eval_before = self.evaluate()
+            eval_before = eval_before if mover == "w" else -eval_before
+        except Exception:  # noqa: BLE001
+            eval_before = 0
+        best_mv, best_score = self.search_best(depth, time_limit)
+        if best_mv is None:
+            return {"label": "", "loss": 0, "best": None}
+        self.make_move(move)
+        try:
+            reply_mv, reply_score = self.search_best(max(1, depth - 0), time_limit)
+            # reply_score с точки зрения стороны, которая теперь ходит (оппонент)
+            played_score = -reply_score
+            if reply_mv is None:
+                st, _txt = self.status()
+                if st == "checkmate":
+                    played_score = 100000
+                elif st in ("stalemate", "draw"):
+                    played_score = 0
+        finally:
+            self.undo()
+        loss = max(0, int(best_score - played_score))
+        same = (move[0] == best_mv[0] and move[1] == best_mv[1] and
+                (move[2] == best_mv[2] or move[2] in "qrbn" and best_mv[2] in "qrbn"))
+        # эвристика "блестящего": лучший ход с форсированным матом или резким выигрышем
+        brilliant = False
+        if same and best_score >= 90000:
+            brilliant = True
+        elif same and played_score - eval_before >= 350 and eval_before <= 120 and best_score >= 150:
+            brilliant = True
+        if brilliant:
+            label = "Блестящий ход"
+        elif same or loss <= 20:
+            label = "Лучший ход" if same else "Отличный ход"
+        elif loss <= 60:
+            label = "Хороший ход"
+        elif loss <= 140:
+            label = "Неточность"
+        elif loss <= 320:
+            label = "Ошибка"
+        else:
+            label = "Зевок"
+        return {
+            "label": label,
+            "loss": loss,
+            "best": best_mv,
+            "best_score": int(best_score),
+            "played_score": int(played_score),
+        }

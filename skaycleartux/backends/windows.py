@@ -455,6 +455,46 @@ class WindowsBackend(BaseBackend):
         used = (total_kb - free_kb) / 1024.0 / 1024.0
         return round(total, 2), round(used, 2)
 
+    def memory_details(self) -> dict:
+        total, used = self.memory_info()
+        swap_total = swap_used = 0.0
+        out = _ps(
+            "$pf=Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue;"
+            "if($pf){$a=$pf|Measure-Object -Property AllocatedBaseSize,CurrentUsage -Sum;"
+            "Write-Output (($a|Where-Object{$_.Property -eq 'AllocatedBaseSize'}).Sum.ToString()+' '+"
+            "($a|Where-Object{$_.Property -eq 'CurrentUsage'}).Sum.ToString())}",
+            timeout=20)
+        parts = out.split()
+        if len(parts) >= 2:
+            swap_total = _num(parts[0]) / 1024.0
+            swap_used = _num(parts[1]) / 1024.0
+        return {
+            "total_gb": float(total or 0.0),
+            "used_gb": float(used or 0.0),
+            "available_gb": max(0.0, float(total or 0.0) - float(used or 0.0)),
+            "percent": (used / total * 100.0) if total > 0 else 0.0,
+            "swap_total_gb": swap_total,
+            "swap_used_gb": swap_used,
+            "cached_gb": 0.0,
+            "buffers_gb": 0.0,
+            "note": "Windows управляет памятью автоматически; прямое освобождение ОЗУ ограничено.",
+        }
+
+    def optimize_memory(self) -> tuple[bool, str]:
+        # Без сторонних утилит надёжно очистить standby/кэш из пользовательского
+        # приложения сложно. Пытаемся выполнить безопасную системную задачу.
+        try:
+            r = common.run(["rundll32.exe", "advapi32.dll,ProcessIdleTasks"],
+                           timeout=45)
+            if r.returncode == 0:
+                return True, ("Выполнена системная оптимизация (ProcessIdleTasks). "
+                              "Эффект зависит от состояния системы; Windows в целом "
+                              "управляет памятью автоматически.")
+        except Exception:  # noqa: BLE001
+            pass
+        return False, ("Прямое освобождение оперативной памяти в Windows ограничено. "
+                       "Рекомендуется закрыть лишние приложения и перезагрузить систему.")
+
     def load_avg(self) -> tuple[float, float, float]:
         return 0.0, 0.0, 0.0
 

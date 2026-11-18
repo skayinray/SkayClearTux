@@ -169,17 +169,61 @@ class LinuxBackend(BaseBackend):
                     continue
         return temps, fans
 
-    def memory_info(self) -> tuple[float, float]:
+    def _meminfo(self) -> dict[str, int]:
         info: dict[str, int] = {}
         try:
             for line in Path("/proc/meminfo").read_text().splitlines():
                 key, _, value = line.partition(":")
                 info[key] = int(value.split()[0])
         except (OSError, ValueError, IndexError):
+            return {}
+        return info
+
+    def memory_info(self) -> tuple[float, float]:
+        info = self._meminfo()
+        if not info:
             return 0.0, 0.0
         total = info.get("MemTotal", 0) / 1024 / 1024
         avail = info.get("MemAvailable", info.get("MemFree", 0)) / 1024 / 1024
         return total, total - avail
+
+    def memory_details(self) -> dict:
+        info = self._meminfo()
+        total_kb = info.get("MemTotal", 0)
+        avail_kb = info.get("MemAvailable", info.get("MemFree", 0))
+        buffers_kb = info.get("Buffers", 0)
+        cached_kb = info.get("Cached", 0) + info.get("SReclaimable", 0)
+        swap_total_kb = info.get("SwapTotal", 0)
+        swap_free_kb = info.get("SwapFree", 0)
+        total = total_kb / 1024 / 1024
+        used = max(0.0, (total_kb - avail_kb) / 1024 / 1024)
+        swap_total = swap_total_kb / 1024 / 1024
+        swap_used = max(0.0, (swap_total_kb - swap_free_kb) / 1024 / 1024)
+        return {
+            "total_gb": total,
+            "used_gb": used,
+            "available_gb": max(0.0, avail_kb / 1024 / 1024),
+            "percent": (used / total * 100.0) if total > 0 else 0.0,
+            "swap_total_gb": swap_total,
+            "swap_used_gb": swap_used,
+            "cached_gb": cached_kb / 1024 / 1024,
+            "buffers_gb": buffers_kb / 1024 / 1024,
+            "note": "Кэш страниц можно безопасно сбросить (потребуются права администратора).",
+        }
+
+    def optimize_memory(self) -> tuple[bool, str]:
+        try:
+            common.run(["sync"], timeout=15)
+        except Exception:  # noqa: BLE001
+            pass
+        r = common.run(["tee", "/proc/sys/vm/drop_caches"], root=True,
+                       input_text="3\n", timeout=20)
+        if r.returncode == 0:
+            return True, ("Кэши диска (pagecache/dentries/inodes) сброшены. "
+                          "Это безопасно, но приложения могут на короткое время "
+                          "работать медленнее, пока кэш восстановится.")
+        return False, ("Не удалось оптимизировать память. Нужны права администратора "
+                       "или операция не поддерживается в этой системе.")
 
     def load_avg(self) -> tuple[float, float, float]:
         try:

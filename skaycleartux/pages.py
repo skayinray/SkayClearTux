@@ -100,20 +100,22 @@ class DashboardPage(QWidget):
         badge = QLabel("ГОТОВ К РАБОТЕ")
         badge.setObjectName("Badge")
         badge.setAlignment(Qt.AlignCenter)
-        top.addWidget(badge, 0, Qt.AlignTop)
+        badge.setWordWrap(False)
+        top.addWidget(badge, 0, Qt.AlignTop | Qt.AlignRight)
         hl.addLayout(top)
 
         hero_row = QHBoxLayout()
         hero_row.setSpacing(16)
         self.hero_status = QLabel("Система в норме")
         self.hero_status.setObjectName("HeroMetric")
+        self.hero_status.setWordWrap(True)
         hero_row.addWidget(self.hero_status, 1)
         hero_hint = QLabel(
             "Следите за нагрузкой и здоровьем системы, сохраняйте отчёт "
-            "или запускайте безопасную очистку в один клик.")
+            "или запускайте безопасную очистку и оптимизацию памяти в один клик.")
         hero_hint.setObjectName("CardSub")
         hero_hint.setWordWrap(True)
-        hero_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        hero_hint.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         hero_row.addWidget(hero_hint, 1)
         hl.addLayout(hero_row)
         root.addWidget(hero)
@@ -165,6 +167,14 @@ class DashboardPage(QWidget):
         self.quick_status.setWordWrap(True)
         ql.addWidget(self.quick_status)
 
+        self.btn_mem_opt = QPushButton("Оптимизировать память")
+        self.btn_mem_opt.clicked.connect(self._optimize_memory)
+        ql.addWidget(self.btn_mem_opt)
+        self.mem_status = QLabel("")
+        self.mem_status.setObjectName("Dim")
+        self.mem_status.setWordWrap(True)
+        ql.addWidget(self.mem_status)
+
         self.btn_report = QPushButton("Сохранить отчёт о системе (HTML)")
         self.btn_report.clicked.connect(self._export_report)
         ql.addWidget(self.btn_report)
@@ -188,6 +198,8 @@ class DashboardPage(QWidget):
 
         self._report_worker = None
         self._clean_worker = None
+        self._mem_worker = None
+        self._live_worker = None
         self._refresh_static()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh_live)
@@ -202,7 +214,9 @@ class DashboardPage(QWidget):
         c1 = card()
         lay = QVBoxLayout(c1); lay.setContentsMargins(18, 16, 18, 16)
         v = QLabel(value); v.setObjectName("Metric")
+        v.setWordWrap(True)
         l = QLabel(label); l.setObjectName("MetricLabel")
+        l.setWordWrap(True)
         lay.addWidget(v); lay.addWidget(l)
         grid.addWidget(c1, r, c)
         return v
@@ -218,31 +232,83 @@ class DashboardPage(QWidget):
     def _refresh_live(self) -> None:
         if self.isVisible() and not self.window().isActiveWindow():
             return
-        try:
-            cpu = self.info.cpu_percent()
-            total, used = self.info.mem()
-            _total_b, free_b, percent = st.disk_usage()
-            self.m_cpu.setText(f"{cpu:.0f} %")
-            self.m_ram.setText(f"{used:.1f} / {total:.1f} ГБ")
-            self.m_disk.setText(f"{cleaner.human(free_b)} свободно")
-            self.m_disk.setToolTip(f"Занято {percent}%")
-            self.m_up.setText(self.info.uptime())
-            temps, _fans = st.sensors_info()
-            self.m_temp.setText(f"{max(t for _n, t in temps):.0f} °C"
-                                if temps else "—")
-            bat = st.battery_info()
-            if bat:
-                self.m_bat.setText(f"{bat.get('capacity', '—')} %")
-                self.m_bat.setToolTip(f"{bat.get('status', '')}")
-            else:
-                self.m_bat.setText("—")
-            self._update_health()
-        except Exception:  # noqa: BLE001 — не даём дашборду уронить программу
-            pass
+        if getattr(self, "_live_worker", None) and self._live_worker.isRunning():
+            return
 
-    def _update_health(self) -> None:
+        def job():
+            data: dict = {}
+            try:
+                data["cpu"] = self.info.cpu_percent()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["memory"] = self.info.mem()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["disk"] = st.disk_usage()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["uptime"] = self.info.uptime()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["sensors"] = st.sensors_info()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["battery"] = st.battery_info()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                data["health"] = report.compute_health(data)
+            except Exception:  # noqa: BLE001
+                pass
+            return data
+
+        self._live_worker = Worker(job)
+
+        def done(data):
+            if not isinstance(data, dict):
+                return
+            try:
+                cpu = data.get("cpu")
+                if cpu is not None:
+                    self.m_cpu.setText(f"{float(cpu):.0f} %")
+                mem = data.get("memory")
+                if mem:
+                    total, used = mem
+                    self.m_ram.setText(f"{used:.1f} / {total:.1f} ГБ")
+                disk = data.get("disk")
+                if disk:
+                    _total_b, free_b, percent = disk
+                    self.m_disk.setText(f"{cleaner.human(free_b)} свободно")
+                    self.m_disk.setToolTip(f"Занято {percent}%")
+                uptime = data.get("uptime")
+                if uptime:
+                    self.m_up.setText(str(uptime))
+                sensors = data.get("sensors")
+                if sensors:
+                    temps, _fans = sensors
+                    self.m_temp.setText(f"{max(t for _n, t in temps):.0f} °C"
+                                        if temps else "—")
+                bat = data.get("battery")
+                if bat:
+                    self.m_bat.setText(f"{bat.get('capacity', '—')} %")
+                    self.m_bat.setToolTip(f"{bat.get('status', '')}")
+                elif "battery" in data:
+                    self.m_bat.setText("—")
+                self._update_health(data.get("health"))
+            except Exception:  # noqa: BLE001
+                pass
+
+        self._live_worker.done.connect(done)
+        self._live_worker.start()
+
+    def _update_health(self, health: dict | None = None) -> None:
         try:
-            h = report.compute_health()
+            h = health or report.compute_health()
         except Exception:  # noqa: BLE001
             return
         self.health_score.setText(f"{h['score']} / 100")
@@ -325,6 +391,78 @@ class DashboardPage(QWidget):
 
         self._clean_worker.done.connect(done)
         self._clean_worker.start()
+
+    def _format_memory_details(self, info: dict) -> str:
+        total = float(info.get("total_gb") or 0.0)
+        used = float(info.get("used_gb") or 0.0)
+        avail = float(info.get("available_gb") or 0.0)
+        percent = float(info.get("percent") or 0.0)
+        swap_t = float(info.get("swap_total_gb") or 0.0)
+        swap_u = float(info.get("swap_used_gb") or 0.0)
+        cached = float(info.get("cached_gb") or 0.0)
+        buffers = float(info.get("buffers_gb") or 0.0)
+        parts = [f"ОЗУ: {used:.1f} / {total:.1f} ГБ ({percent:.0f}%), свободно {avail:.1f} ГБ"]
+        if swap_t > 0.01:
+            sp = (swap_u / swap_t * 100.0) if swap_t > 0 else 0.0
+            parts.append(f"Подкачка: {swap_u:.1f} / {swap_t:.1f} ГБ ({sp:.0f}%)")
+        if cached > 0.01 or buffers > 0.01:
+            parts.append(f"Кэш/буферы: {cached + buffers:.1f} ГБ")
+        note = str(info.get("note") or "").strip()
+        if note:
+            parts.append(note)
+        return " • ".join(parts)
+
+    def _optimize_memory(self) -> None:
+        if self._mem_worker and self._mem_worker.isRunning():
+            return
+        try:
+            info = st.memory_details()
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, "Оптимизация памяти",
+                                f"Не удалось получить сведения о памяти:\n{e}")
+            return
+        details = self._format_memory_details(info)
+        text = (f"{details}\n\n"
+                "Выполнить безопасную оптимизацию памяти/кэшей?\n"
+                "Может потребоваться пароль администратора. "
+                "В некоторых системах эффект ограничен.")
+        ok = QMessageBox.question(
+            self, "Оптимизация памяти", text,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if ok != QMessageBox.Yes:
+            self.mem_status.setText(details)
+            return
+        self.btn_mem_opt.setEnabled(False)
+        self.mem_status.setText("Оптимизирую память…")
+
+        def job():
+            before = st.memory_details()
+            success, msg = st.optimize_memory()
+            after = st.memory_details()
+            return before, success, msg, after
+
+        self._mem_worker = Worker(job)
+
+        def done(result):
+            self.btn_mem_opt.setEnabled(True)
+            if not result:
+                self.mem_status.setText("Оптимизация не выполнена.")
+                return
+            before, success, msg, after = result
+            b_used = float(before.get("used_gb") or 0.0)
+            a_used = float(after.get("used_gb") or 0.0)
+            delta = b_used - a_used
+            summary = self._format_memory_details(after)
+            if success:
+                extra = (f" Освобождено ~{delta:.1f} ГБ ОЗУ."
+                         if delta >= 0.1 else "")
+                self.mem_status.setText(f"{msg}{extra} {summary}")
+            else:
+                self.mem_status.setText(f"{msg} {summary}")
+            self._refresh_live()
+
+        self._mem_worker.done.connect(done)
+        self._mem_worker.start()
 
 
 # --------------------------------------------------------------------------- #

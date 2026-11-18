@@ -205,6 +205,30 @@ class BaseBackend:
     def empty_trash(self) -> tuple[bool, str]:
         return False, NOT_AVAILABLE
 
+    # ----------------------------------------------------------- оптимизация памяти
+    def memory_details(self) -> dict:
+        """Расширенная информация о памяти (ГБ)."""
+        total, used = self.memory_info()
+        total = float(total or 0.0)
+        used = float(used or 0.0)
+        avail = max(0.0, total - used)
+        percent = (used / total * 100.0) if total > 0 else 0.0
+        return {
+            "total_gb": total,
+            "used_gb": used,
+            "available_gb": avail,
+            "percent": percent,
+            "swap_total_gb": 0.0,
+            "swap_used_gb": 0.0,
+            "cached_gb": 0.0,
+            "buffers_gb": 0.0,
+            "note": "",
+        }
+
+    def optimize_memory(self) -> tuple[bool, str]:
+        """Попытка безопасно освободить часть памяти/кэшей."""
+        return False, NOT_AVAILABLE
+
     # ------------------------------------------------------------- большой файл
     def large_files(self, root, min_mb: int = 100, limit: int = 300) -> list:
         import os

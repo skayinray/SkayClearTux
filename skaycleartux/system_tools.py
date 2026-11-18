@@ -305,6 +305,17 @@ def empty_trash() -> tuple[bool, str]:
 
 
 # =========================================================================== #
+#  Оптимизация памяти
+# =========================================================================== #
+def memory_details() -> dict:
+    return BACKEND.memory_details()
+
+
+def optimize_memory() -> tuple[bool, str]:
+    return BACKEND.optimize_memory()
+
+
+# =========================================================================== #
 #  Бэкап
 # =========================================================================== #
 def run_rsync(src: str, dst: str, delete: bool = False) -> tuple[bool, str]:

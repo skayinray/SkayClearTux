@@ -5,16 +5,22 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия без префикса v (например 1.3.2)"
+        required: false
+        default: ""
 
 jobs:
-  release:
-    name: Build & Release
+  build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -23,54 +29,111 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Определить версию
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=$(python3 -c "import re, pathlib; t=pathlib.Path('skaycleartux/__init__.py').read_text(); m=re.search(r'__version__\s*=\s*\"([^\"]+)\"', t); print(m.group(1) if m else '0.0.0')")" >> "$GITHUB_ENV"
+          fi
+          echo "Версия: ${VERSION:-unknown}"
+
       - name: Системные зависимости (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1 rpm
+          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1 libgl1 libfuse2 rpm dpkg-dev file
 
       - name: Установка зависимостей Python
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-          pip install pyinstaller
+          pip install pyinstaller pillow
 
-      - name: Проверка работоспособности (Smoke Test)
+      - name: Проверка синтаксиса и дымовой тест
+        if: matrix.os == 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
           PYTHONIOENCODING: utf-8
         run: |
-          python tools/smoke_test.py || true
+          python -m compileall -q skaycleartux SkayClearTux.py tools
+          python tools/smoke_test.py
 
-      - name: Компиляция бинарников (Linux)
+      - name: Сборка (Linux)
         if: matrix.os == 'ubuntu-latest'
+        env:
+          VERSION: ${{ env.VERSION }}
         run: |
-          bash packaging/01-linux/make_appimage.sh || true
-          bash packaging/01-linux/make_deb.sh || true
-          bash packaging/01-linux/make_rpm.sh || true
-          mkdir -p artifacts
-          cp build/*.AppImage build/deb/*.deb build/rpmbuild/RPMS/*/*.rpm artifacts/ 2>/dev/null || true
+          set -e
+          pyinstaller --noconfirm --clean --windowed \
+            --name SkayClearTux \
+            --add-data "skaycleartux/assets:skaycleartux/assets" \
+            SkayClearTux.py
+          mkdir -p build artifacts
+          bash packaging/01-linux/make_appimage.sh
+          bash packaging/01-linux/make_deb.sh
+          bash packaging/01-linux/make_rpm.sh
+          cp build/SkayClearTux-*-x86_64.AppImage artifacts/ 2>/dev/null || true
+          cp build/SkayClearTux-*-amd64.deb artifacts/ 2>/dev/null || true
+          cp build/SkayClearTux-*-x86_64.rpm artifacts/ 2>/dev/null || true
+          # latest.json для автообновления (AppImage)
+          APPIMAGE=$(ls artifacts/SkayClearTux-*-x86_64.AppImage | head -n1)
+          if [ -n "$APPIMAGE" ]; then
+            SHA=$(sha256sum "$APPIMAGE" | awk '{print $1}')
+            FILE=$(basename "$APPIMAGE")
+            TAG="${GITHUB_REF_NAME:-v${VERSION}}"
+            cat > artifacts/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${FILE}",
+            "sha256": "${SHA}",
+            "notes": "SkayClearTux ${VERSION}",
+            "published": "$(date -u +%Y-%m-%d)"
+          }
+          EOF
+            echo "latest.json:"
+            cat artifacts/latest.json
+          fi
+          ls -la artifacts
 
-      - name: Компиляция бинарников (Windows)
+      - name: Сборка (Windows)
         if: matrix.os == 'windows-latest'
-        shell: pwsh
+        shell: bash
+        env:
+          VERSION: ${{ env.VERSION }}
         run: |
-          pyinstaller --noconfirm --onedir --windowed --name="SkayClearTux" --add-data "skaycleartux/assets;skaycleartux/assets" SkayClearTux.py
-          Compress-Archive -Path dist/SkayClearTux/* -DestinationPath dist/SkayClearTux-windows.zip
-          New-Item -ItemType Directory -Force -Path artifacts
-          Copy-Item dist/SkayClearTux-windows.zip -Destination artifacts/
+          pyinstaller --noconfirm --clean --onedir --windowed --name="SkayClearTux" \
+            --add-data "skaycleartux/assets;skaycleartux/assets" SkayClearTux.py
+          mkdir -p artifacts
+          (cd dist && 7z a ../artifacts/SkayClearTux-windows.zip SkayClearTux) || \
+            powershell -Command "Compress-Archive -Path dist/SkayClearTux/* -DestinationPath artifacts/SkayClearTux-windows.zip"
+          ls -la artifacts
 
-      - name: Компиляция бинарников (macOS)
+      - name: Сборка (macOS)
         if: matrix.os == 'macos-latest'
+        env:
+          VERSION: ${{ env.VERSION }}
         run: |
           bash packaging/03-macos/build.sh || true
           mkdir -p artifacts
           cp dist/*.dmg artifacts/ 2>/dev/null || true
+          ls -la artifacts || true
 
-      - name: Публикация релиза на GitHub
-        uses: softprops/action-gh-release@v2
+      - name: Загрузить артефакты сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkayClearTux-${{ matrix.os }}
+          path: artifacts/*
+          if-no-files-found: warn
+
+      - name: Публикация релиза
         if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

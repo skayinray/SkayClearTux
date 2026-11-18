@@ -3,8 +3,8 @@
 Программа периодически читает JSON-манифест по URL вида:
 
     {
-      "version": "1.3.0",
-      "url": "https://.../SkayClearTux-1.3.0-x86_64.AppImage",
+      "version": "1.3.2",
+      "url": "https://.../SkayClearTux-1.3.2-x86_64.AppImage",
       "sha256": "....",           // необязательно, но рекомендуется
       "notes": "Что нового...",
       "published": "2026-11-16"
@@ -37,6 +37,17 @@ USER_AGENT = f"SkayClearTux/{__version__}"
 
 # Обновления загружаются только по HTTPS — это защищает от подмены по пути.
 ALLOWED_SCHEMES = ("https",)
+
+# Официальный манифест — обновления «из коробки», без ручной настройки.
+DEFAULT_MANIFEST_URL = (
+    "https://github.com/skayinray/SkayClearTux/releases/latest/download/latest.json"
+)
+
+
+def effective_manifest_url(url: str | None = None) -> str:
+    """Возвращает адрес манифеста: заданный пользователем или официальный."""
+    value = str(url or "").strip()
+    return value or DEFAULT_MANIFEST_URL
 
 
 # --------------------------------------------------------------------------- #
@@ -173,9 +184,18 @@ def restart(target: str) -> None:
     """Запускает новую копию и не мешает текущему процессу закрыться."""
     env = dict(os.environ)
     env.pop("APPIMAGE_EXTRACT_AND_RUN", None)
+    kwargs: dict = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            kwargs["startupinfo"] = si
+        except Exception:  # noqa: BLE001
+            pass
     subprocess.Popen([target], env=env, close_fds=True,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True)
+                     start_new_session=True, **kwargs)
 
 
 def temp_download_path(filename: str) -> Path:

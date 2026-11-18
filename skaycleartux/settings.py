@@ -49,11 +49,11 @@ DEFAULTS: dict[str, object] = {
     "backup/src": "",
     "backup/dst": "",
     # Discord Rich Presence
-    "discord/enabled": False,
+    "discord/enabled": True,
     "discord/client_id": "",
     "discord/show_page": True,
     # обновления
-    "update/manifest_url": "",
+    "update/manifest_url": "",  # пусто = официальный манифест из коробки
     "update/auto_check": True,
     "update/last_check": 0,
 }

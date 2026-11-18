@@ -9,7 +9,10 @@ set -e
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 NAME="SkayClearTux"
-VER="${VERSION:-1.3.0}"
+if [ -z "${VERSION:-}" ] && [ -f "$ROOT/skaycleartux/__init__.py" ]; then
+    VERSION="$(python3 -c 'import re, pathlib; t=pathlib.Path("'"$ROOT"'/skaycleartux/__init__.py").read_text(); m=re.search(r"__version__\s*=\s*\"([^\"]+)\"", t); print(m.group(1) if m else "1.3.2")' 2>/dev/null || true)"
+fi
+VER="${VERSION:-1.3.2}"
 
 stage_linux_tree() {
     local STAGE="$1"

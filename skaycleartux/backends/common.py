@@ -112,11 +112,22 @@ def run(cmd: list[str], root: bool = False, timeout: float | None = None,
     env = {**os.environ, "LC_ALL": "C", "LANG": "C"}
     if root and not is_admin():
         cmd = _elevate(cmd)
+    kwargs: dict = {}
+    if sys.platform == "win32":
+        # скрываем всплывающие окна консоли (cmd, powershell, wmic, sc, …)
+        # при работе GUI-приложения на Windows
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            kwargs["startupinfo"] = si
+        except Exception:  # noqa: BLE001
+            pass
     try:
         return subprocess.run(
             cmd, text=True, env=env, cwd=cwd, timeout=timeout,
             input=input_text,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **kwargs)
     except subprocess.TimeoutExpired:
         _log().warning("таймаут команды (%s с): %s", timeout, cmd)
         return subprocess.CompletedProcess(cmd, 127, "", "")

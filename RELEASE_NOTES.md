@@ -1,66 +1,35 @@
-# SkayClearTux 1.3.0 — не только Arch
+# SkayClearTux 1.3.2 — тихие окна, автообновление и Discord из коробки
 
-Linux-версия перестала быть привязанной к Arch. Теперь SkayClearTux сам
-определяет менеджер пакетов дистрибутива и работает с ним: **pacman, apt,
-dnf, zypper, apk**. Плюс к AppImage добавлены пакеты **`.deb`** и **`.rpm`**.
+Исправление самых заметных багов и удобное обновление: на Windows больше нет
+всплывающих окон консоли, автообновления AppImage работают без ручной настройки,
+а Discord Rich Presence получил поддержку Windows.
 
 ---
 
-## Главное
+## Что исправлено
 
-### Один Linux для всех дистрибутивов
+### Windows: никаких всплывающих cmd/PowerShell
+- Все фоновые системные команды (процессы, службы, сеть, железо, winget, WMI и
+  др.) запускаются скрытно через `CREATE_NO_WINDOW`/скрытый `STARTUPINFO`.
+- Перезапуск после обновления на Windows тоже выполняется без лишних окон.
 
-Новый модуль `skaycleartux/backends/linux_pkg.py` определяет дистрибутив по
-`/etc/os-release` (поля `ID` и `ID_LIKE`) и по наличию утилит, а затем
-предоставляет единый интерфейс для:
+### Автообновление работает «из коробки»
+- Если адрес манифеста не задан, приложение автоматически проверяет официальный
+  релиз: `https://github.com/skayinray/SkayClearTux/releases/latest/download/latest.json`.
+- Релизный CI теперь публикует `latest.json` вместе с артефактами (включая
+  SHA-256 AppImage), поэтому новые версии находятся и устанавливаются сами.
+- Для запущенного AppImage обновление скачивается, проверяется по контрольной
+  сумме и применяется автоматически.
 
-- поиска, установки и удаления пакетов;
-- файлов пакета, владельца файла и подробной информации о пакете;
-- проверки и установки обновлений системы.
+### Discord Rich Presence на всех платформах
+- IPC-клиент умеет работать не только с Unix-сокетами, но и с именованными
+  каналами Windows (`\\.\pipe\discord-ipc-N`).
+- Активность можно включить в настройках (по умолчанию включена). Для показа
+  статуса нужен Application ID вашего приложения Discord.
 
-| Дистрибутивы | Менеджер |
-|--------------|----------|
-| Arch, Manjaro, EndeavourOS, Garuda, CachyOS, Artix | `pacman` |
-| Debian, Ubuntu, Mint, Pop!_OS, Kali, Raspberry Pi OS | `apt` / `dpkg` |
-| Fedora, RHEL, CentOS, Rocky, AlmaLinux, Amazon Linux | `dnf` / `rpm` |
-| openSUSE Leap/Tumbleweed, SLES | `zypper` / `rpm` |
-| Alpine, postmarketOS | `apk` |
-
-Если менеджер определить не удалось, программа не падает, а честно сообщает
-об этом — как и на любой другой ОС для недоступных функций.
-
-### Очистка подстраивается под систему
-
-Категории «Кэш пакетов» и «Пакеты-сироты» теперь зависят от дистрибутива:
-
-| Менеджер | Кэш | Сироты |
-|----------|-----|--------|
-| pacman | `paccache -rk1` (или `pacman -Sc`) | `pacman -Rns` |
-| apt | `apt-get clean` | `apt-get autoremove` |
-| dnf | `dnf clean all` | `dnf autoremove` |
-| zypper | `zypper clean --all` | `zypper remove --clean-deps` |
-| apk | `apk cache clean` | не поддерживается |
-
-Категория кэша AUR (`yay`/`paru`) появляется только там, где хелпер установлен.
-
-### Новые пакеты
-
-Кроме переносимого AppImage в релизе теперь есть:
-
-- `SkayClearTux-1.3.0-amd64.deb` — для Debian/Ubuntu и производных;
-- `SkayClearTux-1.3.0-x86_64.rpm` — для Fedora/RHEL/openSUSE и производных.
-
-## Изменения
-
-- Версия — **1.3.0**.
-- Пакетные методы `LinuxBackend` стали тонкими обёртками над `linux_pkg`.
-- Категория очистки `pacman-cache` переименована в `pkg-cache`.
-- CI собирает `.deb`/`.rpm` и прикладывает их к релизу.
-
-## Исправления
-
-- На не-Arch системах разделы «Пакеты» и «Обновления» больше не пытаются
-  вызвать `pacman`.
+### Сборка и пакеты
+- Версии приложения, AppImage, `.deb` и `.rpm` синхронизированы с тегом релиза.
+- Workflow сборки публикует актуальные артефакты и `latest.json`.
 
 ---
 
@@ -68,14 +37,14 @@ dnf, zypper, apk**. Плюс к AppImage добавлены пакеты **`.deb
 
 | Платформа | Файл | Запуск |
 |-----------|------|--------|
-| Linux (любой) | `SkayClearTux-1.3.0-x86_64.AppImage` | `chmod +x` и запустить |
-| Debian/Ubuntu | `SkayClearTux-1.3.0-amd64.deb` | `sudo apt install ./SkayClearTux-1.3.0-amd64.deb` |
-| Fedora/RHEL/openSUSE | `SkayClearTux-1.3.0-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.3.0-x86_64.rpm` |
+| Linux (любой) | `SkayClearTux-1.3.2-x86_64.AppImage` | `chmod +x` и запустить |
+| Debian/Ubuntu | `SkayClearTux-1.3.2-amd64.deb` | `sudo apt install ./SkayClearTux-1.3.2-amd64.deb` |
+| Fedora/RHEL/openSUSE | `SkayClearTux-1.3.2-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.3.2-x86_64.rpm` |
 | Windows | `SkayClearTux-windows.zip` | распаковать, запустить `SkayClearTux.exe` |
 | macOS | `SkayClearTux.dmg` | открыть образ, перетащить в «Программы» |
 
-> **Первый запуск на macOS.** Приложение не подписано — щёлкните по нему правой
-> кнопкой → **Открыть** → **Открыть**.
+> **macOS (первый запуск).** Приложение не подписано — щёлкните правой кнопкой →
+> **Открыть** → **Открыть**.
 
 Из исходников:
 

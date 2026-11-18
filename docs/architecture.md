@@ -72,8 +72,8 @@ skaycleartux/main_window.py→ MainWindow
 
 ```json
 {
-  "version": "1.3.0",
-  "url": "https://github.com/.../SkayClearTux-1.3.0-x86_64.AppImage",
+  "version": "1.3.2",
+  "url": "https://github.com/.../SkayClearTux-1.3.2-x86_64.AppImage",
   "sha256": "…",
   "notes": "Что нового",
   "published": "2026-11-16"

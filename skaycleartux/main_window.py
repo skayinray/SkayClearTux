@@ -478,9 +478,10 @@ class MainWindow(QMainWindow):
         if not self.settings.get_bool("discord/enabled"):
             return
         client_id = str(self.settings.get("discord/client_id") or "").strip()
-        if not client_id.isdigit():
-            return
         self.presence = DiscordPresence(client_id)
+        if not self.presence.available:
+            self.presence = None
+            return
         self.presence.start()
         self._on_page_changed(self.stack.currentIndex())
 
@@ -517,8 +518,7 @@ class MainWindow(QMainWindow):
         return bar
 
     def _maybe_auto_check_updates(self) -> None:
-        url = str(self.settings.get("update/manifest_url") or "").strip()
-        if url and self.settings.get_bool("update/auto_check"):
+        if self.settings.get_bool("update/auto_check"):
             QTimer.singleShot(2500, lambda: self.check_updates(silent=True))
 
     def _maybe_macos_hint(self) -> None:
@@ -542,14 +542,7 @@ class MainWindow(QMainWindow):
     def check_updates(self, silent: bool = False) -> None:
         if self._update_busy:
             return
-        url = str(self.settings.get("update/manifest_url") or "").strip()
-        if not url:
-            if not silent:
-                QMessageBox.information(
-                    self, "Обновления",
-                    "Не задан адрес манифеста обновлений.\n"
-                    "Настройки → Обновление программы.")
-            return
+        url = updater.effective_manifest_url(self.settings.get("update/manifest_url"))
 
         self._update_busy = True
 

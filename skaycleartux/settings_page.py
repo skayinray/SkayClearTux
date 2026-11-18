@@ -411,9 +411,10 @@ class SettingsPage(QWidget):
         lay.addLayout(row)
 
         hint = QLabel(
-            "Создайте приложение на discord.com/developers/applications, "
-            "скопируйте Application ID и вставьте сюда. Активность видна только "
-            "пока SkayClearTux запущен.")
+            "Статус «играет в SkayClearTux» виден, пока программа открыта. "
+            "Укажите Application ID своего приложения с "
+            "discord.com/developers/applications — после этого активность "
+            "появится в Discord автоматически (включая Windows, macOS и Linux).")
         hint.setObjectName("CardSub")
         hint.setWordWrap(True)
         lay.addWidget(hint)
@@ -433,7 +434,7 @@ class SettingsPage(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel("Адрес манифеста"))
         self.edit_manifest = QLineEdit(str(self.settings.get("update/manifest_url") or ""))
-        self.edit_manifest.setPlaceholderText("https://…/latest.json")
+        self.edit_manifest.setPlaceholderText("из коробки: официальный релиз GitHub")
         self.edit_manifest.editingFinished.connect(
             lambda: self._save("update/manifest_url", self.edit_manifest.text().strip()))
         row.addWidget(self.edit_manifest, 1)
@@ -453,9 +454,9 @@ class SettingsPage(QWidget):
         lay.addLayout(row2)
 
         hint = QLabel(
-            "Обновление скачивается по ссылке из манифеста, проверяется по "
-            "контрольной сумме и подменяет текущий AppImage — программа сама "
-            "перезапустится. Готовый CI для публикации обновлений — в папке packaging.")
+            "Обновления работают из коробки — при запуске программа сама проверяет "
+            "новые версии на GitHub. Для AppImage обновление скачивается, "
+            "проверяется по контрольной сумме и устанавливается автоматически.")
         hint.setObjectName("CardSub")
         hint.setWordWrap(True)
         lay.addWidget(hint)

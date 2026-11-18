@@ -21,7 +21,7 @@ from .backends import common as platform_common
 from .chess_widget import ChessPage
 from .discord_rpc import DiscordPresence
 from .extra_pages import (BackupPage, BootPage, DiagnosticsPage, DisksPage,
-                          FirewallPage, HardwarePage, HashPage, HelpPage,
+                          FirewallPage, FocusPage, HardwarePage, HashPage, HelpPage,
                           JournalPage, LargeFilesPage, ModulesPage, MonitorPage,
                           NotesPage, PasswordPage, PkgFilesPage, PortsPage,
                           TextToolsPage, TimersPage, TrashPage, TweaksPage,
@@ -52,7 +52,7 @@ NAV: list[tuple[str, list[tuple[str, str]]]] = [
                  ("Твики", "tweaks")]),
     ("Утилиты", [("Заметки", "notes"), ("Хэши", "hashes"),
                  ("Текст", "texttools"), ("Бэкап", "backup"),
-                 ("Пароли", "passwords")]),
+                 ("Пароли", "passwords"), ("Фокус", "focus")]),
     ("Развлечения", [("Шахматы", "chess")]),
     ("Настройка", [("Темы", "themes"), ("Настройки", "settings"),
                    ("Справка", "help"), ("О программе", "about")]),
@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
             "texttools": TextToolsPage(self.settings),
             "backup": BackupPage(self.settings),
             "passwords": PasswordPage(self.settings),
+            "focus": FocusPage(self.settings),
             "chess": ChessPage(self.colors, self.settings),
             "themes": ThemesPage(self.apply_theme, self.theme_name),
             "settings": SettingsPage(self.settings, self.apply_theme),

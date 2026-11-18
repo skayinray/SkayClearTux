@@ -79,10 +79,44 @@ class DashboardPage(QWidget):
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(16)
 
-        head = QLabel("Главная")
+        hero = card()
+        hero.setObjectName("Hero")
+        hl = QVBoxLayout(hero)
+        hl.setContentsMargins(22, 20, 22, 20)
+        hl.setSpacing(8)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        title_col = QVBoxLayout()
+        head = QLabel(f"SkayClearTux {__version__}")
         head.setObjectName("H1")
-        root.addWidget(head)
-        root.addWidget(self._dim("Обзор системы и быстрые действия"))
+        title_col.addWidget(head)
+        sub = QLabel(
+            "Крупное обновление: обновлённый интерфейс, быстрые действия, "
+            "шахматы с премувами и улучшенный Discord Rich Presence.")
+        sub.setObjectName("CardSub")
+        sub.setWordWrap(True)
+        title_col.addWidget(sub)
+        top.addLayout(title_col, 1)
+        badge = QLabel("ГОТОВ К РАБОТЕ")
+        badge.setObjectName("Badge")
+        badge.setAlignment(Qt.AlignCenter)
+        top.addWidget(badge, 0, Qt.AlignTop)
+        hl.addLayout(top)
+
+        hero_row = QHBoxLayout()
+        hero_row.setSpacing(16)
+        self.hero_status = QLabel("Система в норме")
+        self.hero_status.setObjectName("HeroMetric")
+        hero_row.addWidget(self.hero_status, 1)
+        hero_hint = QLabel(
+            "Следите за нагрузкой и здоровьем системы, сохраняйте отчёт "
+            "или запускайте безопасную очистку в один клик.")
+        hero_hint.setObjectName("CardSub")
+        hero_hint.setWordWrap(True)
+        hero_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        hero_row.addWidget(hero_hint, 1)
+        hl.addLayout(hero_row)
+        root.addWidget(hero)
 
         grid = QGridLayout()
         grid.setSpacing(14)
@@ -99,20 +133,20 @@ class DashboardPage(QWidget):
         actions.setSpacing(14)
 
         health = card()
-        hl = QVBoxLayout(health)
-        hl.setContentsMargins(18, 16, 18, 16)
-        ht = QLabel("Здоровье системы"); ht.setObjectName("CardTitle"); hl.addWidget(ht)
+        hll = QVBoxLayout(health)
+        hll.setContentsMargins(18, 16, 18, 16)
+        ht = QLabel("Здоровье системы"); ht.setObjectName("CardTitle"); hll.addWidget(ht)
         self.health_score = QLabel("— / 100")
         self.health_score.setObjectName("Metric")
-        hl.addWidget(self.health_score)
+        hll.addWidget(self.health_score)
         self.health_level = QLabel("")
         self.health_level.setObjectName("CardSub")
-        hl.addWidget(self.health_level)
+        hll.addWidget(self.health_level)
         self.health_tips = QLabel("")
         self.health_tips.setObjectName("CardSub")
         self.health_tips.setWordWrap(True)
         self.health_tips.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        hl.addWidget(self.health_tips)
+        hll.addWidget(self.health_tips)
         actions.addWidget(health, 2)
 
         quick = card()
@@ -121,8 +155,17 @@ class DashboardPage(QWidget):
         qt = QLabel("Быстрые действия"); qt.setObjectName("CardTitle"); ql.addWidget(qt)
         qsub = QLabel("Полезные операции в один клик.")
         qsub.setObjectName("CardSub"); qsub.setWordWrap(True); ql.addWidget(qsub)
+
+        self.btn_quick_clean = QPushButton("Быстрая очистка (безопасно)")
+        self.btn_quick_clean.setObjectName("Accent")
+        self.btn_quick_clean.clicked.connect(self._quick_clean)
+        ql.addWidget(self.btn_quick_clean)
+        self.quick_status = QLabel("")
+        self.quick_status.setObjectName("Dim")
+        self.quick_status.setWordWrap(True)
+        ql.addWidget(self.quick_status)
+
         self.btn_report = QPushButton("Сохранить отчёт о системе (HTML)")
-        self.btn_report.setObjectName("Accent")
         self.btn_report.clicked.connect(self._export_report)
         ql.addWidget(self.btn_report)
         self.report_status = QLabel("")
@@ -144,6 +187,7 @@ class DashboardPage(QWidget):
         root.addStretch(1)
 
         self._report_worker = None
+        self._clean_worker = None
         self._refresh_static()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh_live)
@@ -206,6 +250,9 @@ class DashboardPage(QWidget):
         self.health_level.setText(h["level"])
         tips = h.get("tips") or []
         self.health_tips.setText(" • ".join(tips[:3]))
+        if hasattr(self, "hero_status"):
+            self.hero_status.setText(f"{h['level']} · {h['score']}/100")
+            self.hero_status.setStyleSheet(f"color: {h['color']};")
 
     def _export_report(self) -> None:
         if self._report_worker and self._report_worker.isRunning():
@@ -236,6 +283,48 @@ class DashboardPage(QWidget):
 
         self._report_worker.done.connect(done)
         self._report_worker.start()
+
+    def _quick_clean(self) -> None:
+        if self._clean_worker and self._clean_worker.isRunning():
+            return
+        self.btn_quick_clean.setEnabled(False)
+        self.quick_status.setText("Сканирую безопасные категории…")
+
+        def job():
+            cats = cleaner.scan_all()
+            safe = [c for c in cats if getattr(c, "safe", False) and c.size > 0]
+            if not safe:
+                return 0, 0, "Нечего очищать — безопасный мусор не найден."
+            freed = 0
+            cleaned = 0
+            for c in safe:
+                try:
+                    f, _msg = c.clean()
+                except Exception:  # noqa: BLE001
+                    f = 0
+                if f:
+                    freed += int(f)
+                    cleaned += 1
+            if freed <= 0 and cleaned == 0:
+                return 0, len(safe), "Безопасные категории проверены, освободить место не удалось."
+            return freed, cleaned, ""
+
+        self._clean_worker = Worker(job)
+
+        def done(result):
+            self.btn_quick_clean.setEnabled(True)
+            if not result:
+                self.quick_status.setText("Очистка не выполнена.")
+                return
+            freed, cleaned, msg = result
+            if msg and freed <= 0:
+                self.quick_status.setText(msg)
+                return
+            self.quick_status.setText(
+                f"Готово: освобождено ~{human(freed)} (категорий: {cleaned}).")
+
+        self._clean_worker.done.connect(done)
+        self._clean_worker.start()
 
 
 # --------------------------------------------------------------------------- #

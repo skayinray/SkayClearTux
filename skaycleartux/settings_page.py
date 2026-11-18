@@ -44,6 +44,7 @@ START_PAGES: list[tuple[str, str]] = [
     ("texttools", "Текст"),
     ("backup", "Бэкап"),
     ("passwords", "Пароли"),
+    ("focus", "Фокус"),
     ("chess", "Шахматы"),
     ("themes", "Темы"),
     ("help", "Справка"),

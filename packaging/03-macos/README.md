@@ -24,7 +24,7 @@ bash packaging/03-macos/build.sh
 * создаёт окружение `.venv-mac`, ставит `PySide6`, `pyinstaller`, `pillow`;
 * делает иконку `.icns`;
 * собирает `dist/SkayClearTux.app`;
-* упаковывает в `dist/SkayClearTux-1.3.3.dmg`.
+* упаковывает в `dist/SkayClearTux-1.4.0.dmg`.
 
 ## Первый запуск
 
@@ -82,9 +82,9 @@ dylib Python/PySide6, нужны для нотаризации).
 codesign --deep --force --options runtime --timestamp \
     --entitlements packaging/03-macos/entitlements.plist \
     --sign "Developer ID Application: ВАШЕ ИМЯ (TEAMID)" dist/SkayClearTux.app
-xcrun notarytool submit dist/SkayClearTux-1.3.3.dmg \
+xcrun notarytool submit dist/SkayClearTux-1.4.0.dmg \
     --apple-id "you@example.com" --team-id TEAMID --password "app-specific-pw" --wait
-xcrun stapler staple dist/SkayClearTux-1.3.3.dmg
+xcrun stapler staple dist/SkayClearTux-1.4.0.dmg
 ```
 
 > **Требует действий мейнтейнера.** Сертификат Developer ID и учётные данные

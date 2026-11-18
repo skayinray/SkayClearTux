@@ -6,6 +6,11 @@
 from __future__ import annotations
 
 import random
+import time
+
+
+class _SearchTimeoutError(Exception):
+    """Прерывание поиска по лимиту времени."""
 
 FILES = "abcdefgh"
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -461,7 +466,40 @@ class Board:
                 score -= PIECE_VALUE[u] + PST[u][i ^ 56]
         return score
 
-    def negamax(self, depth: int, alpha: int, beta: int) -> int:
+    def _move_order_key(self, m: tuple[int, int, str]) -> int:
+        """Эвристика для сортировки ходов (чем больше — тем раньше)."""
+        frm, to, promo = m
+        score = 0
+        victim = self.sq[to]
+        if promo == "ep":
+            victim = "p"
+        if victim:
+            attacker = self.sq[frm]
+            v = PIECE_VALUE.get(victim.upper(), 0)
+            a = PIECE_VALUE.get(attacker.upper(), 100) if attacker else 100
+            score += 10 * v - a  # MVV-LVA
+        if promo in ("q", "r", "b", "n"):
+            score += PIECE_VALUE.get(promo.upper(), 0)
+        elif promo == "castle":
+            score += 50
+        # небольшой бонус за продвижение пешки
+        p = self.sq[frm]
+        if p and p.upper() == "P":
+            r_to = rk(to)
+            score += (6 - r_to) if p.isupper() else r_to
+        return -score  # sort ascending
+
+    def _ordered_moves(self) -> list[tuple[int, int, str]]:
+        moves = self.legal_moves()
+        moves.sort(key=self._move_order_key)
+        return moves
+
+    def negamax(self, depth: int, alpha: int, beta: int,
+                deadline: float | None = None, nodes: list[int] | None = None) -> int:
+        if deadline is not None and nodes is not None:
+            nodes[0] += 1
+            if (nodes[0] & 2047) == 0 and time.monotonic() >= deadline:
+                raise _SearchTimeoutError()
         moves = self.legal_moves()
         if not moves:
             if self.in_check(self.turn):
@@ -470,12 +508,11 @@ class Board:
         if depth == 0:
             s = self.evaluate()
             return s if self.turn == "w" else -s
-        # сортировка: взятия вперёд
-        moves.sort(key=lambda m: 0 if self.sq[m[1]] else 1)
+        moves.sort(key=self._move_order_key)
         best = -10**9
         for m in moves:
             self.make_move(m)
-            val = -self.negamax(depth - 1, -beta, -alpha)
+            val = -self.negamax(depth - 1, -beta, -alpha, deadline, nodes)
             self.undo()
             if val > best:
                 best = val
@@ -485,20 +522,52 @@ class Board:
                 break
         return best
 
-    def best_move(self, depth: int = 2) -> tuple[int, int, str] | None:
-        moves = self.legal_moves()
+    def best_move(self, depth: int = 2,
+                  time_limit: float | None = None) -> tuple[int, int, str] | None:
+        moves = self._ordered_moves()
         if not moves:
             return None
+        # на малой глубине добавим чуть разнообразия
+        if depth <= 1 and len(moves) > 1:
+            random.shuffle(moves[: min(4, len(moves))])
+            return moves[0]
+
+        deadline = (time.monotonic() + max(0.05, float(time_limit))
+                    ) if time_limit is not None else None
+        nodes = [0]
+        best_move: tuple[int, int, str] = moves[0]
         best_val = -10**9
-        best: list = []
-        moves.sort(key=lambda m: 0 if self.sq[m[1]] else 1)
-        for m in moves:
-            self.make_move(m)
-            val = -self.negamax(depth - 1, -10**9, 10**9)
-            self.undo()
-            if val > best_val:
-                best_val = val
-                best = [m]
-            elif val == best_val:
-                best.append(m)
-        return random.choice(best)
+
+        def _root(d: int):
+            local_best = moves[0]
+            local_val = -10**9
+            alpha, beta = -10**9, 10**9
+            ordered = self._ordered_moves()
+            for m in ordered:
+                self.make_move(m)
+                try:
+                    val = -self.negamax(d - 1, -beta, -alpha, deadline, nodes)
+                except _SearchTimeoutError:
+                    self.undo()
+                    raise
+                self.undo()
+                if val > local_val:
+                    local_val = val
+                    local_best = m
+                if val > alpha:
+                    alpha = val
+            return local_val, local_best
+
+        # итеративное углубление: возвращаем лучший ход из последней завершённой глубины
+        for d in range(1, max(1, depth) + 1):
+            if deadline is not None and time.monotonic() >= deadline and d > 1:
+                break
+            try:
+                val, mv = _root(d)
+                best_val, best_move = val, mv
+            except _SearchTimeoutError:
+                break
+            # найден мат — дальше искать бессмысленно
+            if best_val >= 90000:
+                break
+        return best_move

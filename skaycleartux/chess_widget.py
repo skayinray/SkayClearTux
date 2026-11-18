@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import (QEasingCurve, QRectF, Qt, QThread,
+from PySide6.QtCore import (QEasingCurve, QRectF, QSize, Qt, QThread,
                             QVariantAnimation, Signal)
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
@@ -30,14 +30,22 @@ def piece_pixmap(piece: str, size: int) -> QPixmap:
 
 
 class BotThread(QThread):
-    done = Signal(object)
+    done = Signal(int, object)
 
-    def __init__(self, fen: str, depth: int):
+    def __init__(self, fen: str, depth: int, token: int,
+                 time_limit: float | None = None):
         super().__init__()
         self.fen, self.depth = fen, depth
+        self.token = token
+        self.time_limit = time_limit
 
     def run(self) -> None:
-        self.done.emit(Board(self.fen).best_move(self.depth))
+        try:
+            board = Board(self.fen)
+            mv = board.best_move(self.depth, self.time_limit)
+        except Exception:  # noqa: BLE001
+            mv = None
+        self.done.emit(self.token, mv)
 
 
 class BoardView(QWidget):
@@ -52,6 +60,7 @@ class BoardView(QWidget):
         self.targets: list[int] = []
         self.last_move: tuple[int, int] | None = None
         self.hint_move: tuple[int, int] | None = None
+        self.premove: tuple[int, int] | None = None
         self.check_sq: int | None = None
         self.interactive = True
         # настройки отображения
@@ -105,6 +114,8 @@ class BoardView(QWidget):
                 p.fillRect(rect, QColor(255, 235, 130, 80))
             if self.hint_move and i in self.hint_move:
                 p.fillRect(rect, QColor(120, 200, 120, 90))
+            if self.premove and i in self.premove:
+                p.fillRect(rect, QColor(220, 90, 90, 110))
             if self.check_sq == i:
                 p.fillRect(rect, QColor(255, 70, 70, 110))
 
@@ -190,8 +201,6 @@ class BoardView(QWidget):
         self.update()
 
     def mousePressEvent(self, e) -> None:
-        if not self.interactive:
-            return
         i = self._square_at(e.position().x(), e.position().y())
         if i is not None:
             self.clicked.emit(i)
@@ -204,12 +213,9 @@ class PromotionDialog(QDialog):
         self.choice = "q"
         lay = QHBoxLayout(self)
         lay.setSpacing(8)
-        prefix = "w" if color == "w" else "b"
         for code in "qrbn":
             b = QPushButton()
-            b.setIcon(piece_pixmap(code.upper() if prefix == "w" else code,
-                                   64))
-            from PySide6.QtCore import QSize
+            b.setIcon(piece_pixmap(code.upper() if color == "w" else code, 64))
             b.setIconSize(QSize(56, 56))
             b.setFixedSize(76, 76)
             b.clicked.connect(lambda _=False, c=code: self._pick(c))
@@ -233,6 +239,9 @@ class ChessPage(QWidget):
         self._mode = "bot"
         self._result_recorded = False
         self._last_delta = 0
+        self._game_token = 0
+        self._premove_from: int | None = None
+        self.moves_label = None
         self._build()
         self.apply_settings()
         self._new_game()
@@ -248,9 +257,13 @@ class ChessPage(QWidget):
 
         side = QVBoxLayout()
         side.setSpacing(10)
-        title = QLabel("Шахматы с ботом")
+        title = QLabel("Шахматы")
         title.setObjectName("H2")
         side.addWidget(title)
+        hint = QLabel("Совет: во время хода бота можно поставить премув (красная подсветка).")
+        hint.setObjectName("Dim")
+        hint.setWordWrap(True)
+        side.addWidget(hint)
 
         side.addWidget(QLabel("Сложность"))
         self.level = QComboBox()
@@ -308,16 +321,20 @@ class ChessPage(QWidget):
         row2.addWidget(self.flip_btn)
         side.addLayout(row2)
 
-        side.addWidget(QLabel("Ходы"))
-        self.moves_label = side.itemAt(side.count() - 1).widget()
+        self.btn_cancel_premove = QPushButton("Отменить премув")
+        self.btn_cancel_premove.clicked.connect(self._clear_premove)
+        side.addWidget(self.btn_cancel_premove)
+
+        self.moves_label = QLabel("Ходы")
+        side.addWidget(self.moves_label)
         self.moves = QListWidget()
         side.addWidget(self.moves, 1)
         root.addLayout(side, 1)
 
     # ---------------------------------------------------------- настройки
     def apply_settings(self) -> None:
-        self.level.setCurrentText(self.settings.get("chess/difficulty"))
-        self.side_box.setCurrentText(self.settings.get("chess/side"))
+        self.level.setCurrentText(str(self.settings.get("chess/difficulty")))
+        self.side_box.setCurrentText(str(self.settings.get("chess/side")))
         self.view.show_coords = self.settings.get_bool("chess/show_coords")
         self.view.show_hints = self.settings.get_bool("chess/show_hints")
         self.view.highlight_last = self.settings.get_bool("chess/highlight_last")
@@ -327,19 +344,44 @@ class ChessPage(QWidget):
             self.moves_label.setVisible(show_moves)
         self.view.update()
 
+    # ------------------------------------------------------------ служебное
+    def _bot_running(self) -> bool:
+        return bool(self._thread and self._thread.isRunning())
+
+    def _is_human_turn(self) -> bool:
+        return self.view.game.turn == self.human
+
+    def _piece_is_human(self, i: int) -> bool:
+        piece = self.view.game.sq[i]
+        if not piece:
+            return False
+        return (piece.isupper() and self.human == "w") or (
+            piece.islower() and self.human == "b")
+
+    def _clear_premove(self) -> None:
+        self._premove_from = None
+        self.view.premove = None
+        self.view.update()
+
     # ------------------------------------------------------------------ игра
     def _new_game(self) -> None:
+        self._game_token += 1
         self.human = "w" if self.side_box.currentText() == "Белые" else "b"
+        self.view.stop_animation()
         self.view.game = Board()
         self.view.flipped = self.human == "b"
         self.view.selected = None
         self.view.targets = []
         self.view.last_move = None
         self.view.hint_move = None
+        self.view.premove = None
         self.view.check_sq = None
+        self.view.interactive = True
+        self._premove_from = None
         self.moves.clear()
         self._result_recorded = False
         self._last_delta = 0
+        self._mode = "bot"
         self._update_status()
         self._update_elo_card()
         self.view.update()
@@ -352,9 +394,12 @@ class ChessPage(QWidget):
 
     def _undo(self) -> None:
         g = self.view.game
-        if self._thread and self._thread.isRunning():
+        if self._bot_running():
             return
+        self._game_token += 1
         self.view.stop_animation()
+        if not g.history:
+            return
         g.undo()
         if g.turn != self.human and g.history:
             g.undo()
@@ -364,22 +409,71 @@ class ChessPage(QWidget):
         self.view.targets = []
         self.view.last_move = None
         self.view.hint_move = None
+        self._clear_premove()
+        self._result_recorded = False
+        self._last_delta = 0
         self._update_status()
         self.view.update()
 
     def _on_click(self, i: int) -> None:
+        try:
+            self._handle_click(i)
+        except Exception:  # noqa: BLE001
+            # не даём шахматам уронить всё приложение
+            self._update_status()
+            self.view.update()
+
+    def _handle_click(self, i: int) -> None:
         g = self.view.game
-        if g.turn != self.human or (self._thread and self._thread.isRunning()):
+        if g.status()[0] != "play":
             return
-        if self.view.selected is not None and i in self.view.targets:
-            self._apply_human(self.view.selected, i)
+        # ход человека
+        if self._is_human_turn() and not self._bot_running():
+            if self.view.selected is not None and i in self.view.targets:
+                self._apply_human(self.view.selected, i)
+                return
+            if self._piece_is_human(i):
+                self.view.selected = i
+                self.view.targets = [m[1] for m in g.moves_from(i)]
+            else:
+                self.view.selected = None
+                self.view.targets = []
+            self.view.update()
             return
-        piece = g.sq[i]
-        if piece and ((piece.isupper() and self.human == "w") or
-                      (piece.islower() and self.human == "b")):
+
+        # не наш ход / бот думает — режим премува
+        if not self._piece_is_human(i) and self._premove_from is None and i == self.view.selected:
+            # не должно случаться, но на всякий случай
+            self.view.selected = None
+            self.view.update()
+            return
+
+        if self._premove_from is not None:
+            if i == self._premove_from:
+                self._clear_premove()
+                self.view.selected = None
+                self.view.targets = []
+            elif self._piece_is_human(i):
+                self._premove_from = i
+                self.view.selected = i
+                self.view.targets = []
+                self.view.premove = None
+            else:
+                self.view.premove = (self._premove_from, i)
+                self.view.selected = None
+                self.view.targets = []
+                self._premove_from = None
+            self.view.update()
+            return
+
+        if self._piece_is_human(i):
+            self._premove_from = i
             self.view.selected = i
-            self.view.targets = [m[1] for m in g.moves_from(i)]
+            self.view.targets = []
+            self.view.premove = None
         else:
+            # клик в пустоту/по фигуре соперника без выбора — снять премув
+            self._clear_premove()
             self.view.selected = None
             self.view.targets = []
         self.view.update()
@@ -388,6 +482,9 @@ class ChessPage(QWidget):
         g = self.view.game
         options = [m for m in g.moves_from(frm) if m[1] == to]
         if not options:
+            self.view.selected = None
+            self.view.targets = []
+            self.view.update()
             return
         promo = ""
         if len(options) > 1 and any(m[2] in "qrbn" for m in options):
@@ -400,39 +497,106 @@ class ChessPage(QWidget):
             promo = options[0][2]
         g.make_move((frm, to, promo))
         self._after_move(frm, to)
-        if g.status()[0] == "play" and g.turn != self.human:
+        self._maybe_start_bot_or_premove()
+
+    def _maybe_start_bot_or_premove(self) -> None:
+        g = self.view.game
+        if g.status()[0] != "play":
+            return
+        if g.turn != self.human:
             self._bot_move()
+        else:
+            self._try_premove()
+
+    def _try_premove(self) -> None:
+        pm = self.view.premove
+        if not pm or not self._is_human_turn() or self._bot_running():
+            return
+        if self.view.game.status()[0] != "play":
+            self._clear_premove()
+            return
+        frm, to = pm
+        options = [m for m in self.view.game.moves_from(frm) if m[1] == to]
+        if not options:
+            self._clear_premove()
+            self._update_status()
+            self.view.update()
+            return
+        # для премува превращение — всегда ферзь, чтобы не блокировать диалог
+        if len(options) > 1 and any(m[2] in "qrbn" for m in options):
+            promo = "q"
+        else:
+            promo = options[0][2]
+        self.view.premove = None
+        self._premove_from = None
+        self.view.game.make_move((frm, to, promo))
+        self._after_move(frm, to)
+        self._maybe_start_bot_or_premove()
 
     def _bot_move(self) -> None:
+        if self._bot_running() or self.view.game.status()[0] != "play":
+            return
         self.status.setText("Бот думает…")
         self.view.interactive = False
-        self._run_engine("bot", self.LEVELS[self.level.currentText()])
+        depth = self.LEVELS.get(self.level.currentText(), 2)
+        self._run_engine("bot", depth)
 
     def _hint(self) -> None:
-        if self._thread and self._thread.isRunning():
+        if self._bot_running():
             return
         if self.view.game.turn != self.human or self.view.game.status()[0] != "play":
             return
         self.status.setText("Ищу подсказку…")
-        depth = max(2, self.LEVELS[self.level.currentText()])
+        depth = max(2, self.LEVELS.get(self.level.currentText(), 2))
         self._run_engine("hint", depth)
+
+    def _time_limit_for_depth(self, depth: int) -> float | None:
+        # Лимит времени делает высокие сложности отзывчивыми
+        if depth >= 4:
+            return 1.8
+        if depth >= 3:
+            return 1.2
+        return None
 
     def _run_engine(self, mode: str, depth: int) -> None:
         self._mode = mode
-        self._thread = BotThread(self.view.game.fen(), depth)
+        token = self._game_token
+        time_limit = self._time_limit_for_depth(depth) if mode == "bot" else max(
+            0.8, self._time_limit_for_depth(depth) or 0.8)
+        self._thread = BotThread(self.view.game.fen(), depth, token, time_limit)
         self._thread.done.connect(self._on_engine_result)
         self._thread.start()
 
-    def _on_engine_result(self, mv) -> None:
+    def _on_engine_result(self, token: int, mv) -> None:
+        try:
+            self._handle_engine_result(token, mv)
+        except Exception:  # noqa: BLE001
+            if token == self._game_token and self._mode == "bot":
+                self.view.interactive = True
+            self._update_status()
+            self.view.update()
+
+    def _handle_engine_result(self, token: int, mv) -> None:
+        if token != self._game_token:
+            return
+        g = self.view.game
         if self._mode == "bot":
             self.view.interactive = True
-            if mv:
-                self.view.game.make_move(mv)
-                self._after_move(mv[0], mv[1])
+            if mv and g.status()[0] == "play" and g.turn != self.human:
+                frm, to, promo = mv
+                options = [m for m in g.moves_from(frm) if m[1] == to]
+                if options:
+                    # на случай, если движок вернул ход без уточнения превращения
+                    if not any(m[2] == promo for m in options):
+                        promo = options[0][2]
+                    g.make_move((frm, to, promo))
+                    self._after_move(frm, to)
+                    # после хода бота пробуем премув (если теперь ход человека)
+                    self._try_premove()
             self._update_status()
             self.view.update()
         else:
-            if mv:
+            if mv and g.status()[0] == "play":
                 self.view.hint_move = (mv[0], mv[1])
                 self.status.setText(
                     f"Подсказка: {sq_name(mv[0])}–{sq_name(mv[1])}")
@@ -445,6 +609,7 @@ class ChessPage(QWidget):
         self.view.hint_move = None
         self.view.selected = None
         self.view.targets = []
+        self._premove_from = None
         if self.settings.get_bool("chess/animate"):
             self.view.animate_move(frm, to, self.settings.get_int("ui/anim_ms") + 60)
         self.moves.addItem(f"{sq_name(frm)}–{sq_name(to)}")
@@ -454,14 +619,18 @@ class ChessPage(QWidget):
         self.view.update()
 
     def _update_status(self) -> None:
-        state, text = self.view.game.status()
-        if state == "play":
-            who = "Белые" if self.view.game.turn == "w" else "Чёрные"
-            self.status.setText(text or f"Ход: {who}")
-        else:
-            self.status.setText(text)
-        g = self.view.game
-        self.view.check_sq = g.king_sq(g.turn) if g.in_check(g.turn) else None
+        try:
+            g = self.view.game
+            state, text = g.status()
+            if state == "play":
+                who = "Белые" if g.turn == "w" else "Чёрные"
+                extra = "  ·  премув" if self.view.premove else ""
+                self.status.setText((text or f"Ход: {who}") + extra)
+            else:
+                self.status.setText(text)
+            self.view.check_sq = g.king_sq(g.turn) if g.in_check(g.turn) else None
+        except Exception:  # noqa: BLE001
+            pass
 
     # ------------------------------------------------------------------ Эло
     def _difficulty_changed(self, text: str) -> None:
@@ -487,10 +656,14 @@ class ChessPage(QWidget):
             f"Поражений: {losses}\nЛучший рейтинг: {best}")
 
     def _check_game_over(self) -> None:
-        state, _text = self.view.game.status()
+        try:
+            state, _text = self.view.game.status()
+        except Exception:  # noqa: BLE001
+            return
         if state == "play" or self._result_recorded:
             return
         self._result_recorded = True
+        self._clear_premove()
         winner = None  # 'human' | 'bot' | None(ничья)
         if state == "checkmate":
             loser = self.view.game.turn  # сторона, которой поставлен мат
@@ -498,35 +671,38 @@ class ChessPage(QWidget):
         self._record_result(winner)
 
     def _record_result(self, winner: str | None) -> None:
-        elo = self.settings.get_int("chess/elo")
-        bot = self.BOT_ELO.get(self.level.currentText(), 1500)
-        expected = 1.0 / (1.0 + 10 ** ((bot - elo) / 400.0))
-        actual = 1.0 if winner == "human" else (0.0 if winner == "bot" else 0.5)
-        k = 32 if self.settings.get_int("chess/games") < 20 else 20
-        delta = round(k * (actual - expected))
-        if delta == 0 and actual != expected:
-            delta = 1 if actual > expected else -1
-        new_elo = max(100, min(3000, elo + delta))
-        self._last_delta = new_elo - elo
+        try:
+            elo = self.settings.get_int("chess/elo")
+            bot = self.BOT_ELO.get(self.level.currentText(), 1500)
+            expected = 1.0 / (1.0 + 10 ** ((bot - elo) / 400.0))
+            actual = 1.0 if winner == "human" else (0.0 if winner == "bot" else 0.5)
+            k = 32 if self.settings.get_int("chess/games") < 20 else 20
+            delta = round(k * (actual - expected))
+            if delta == 0 and actual != expected:
+                delta = 1 if actual > expected else -1
+            new_elo = max(100, min(3000, elo + delta))
+            self._last_delta = new_elo - elo
 
-        games = self.settings.get_int("chess/games") + 1
-        self.settings.set("chess/elo", new_elo)
-        self.settings.set("chess/games", games)
-        if winner == "human":
-            self.settings.set("chess/wins", self.settings.get_int("chess/wins") + 1)
-            outcome = "Победа!"
-        elif winner == "bot":
-            self.settings.set("chess/losses", self.settings.get_int("chess/losses") + 1)
-            outcome = "Поражение"
-        else:
-            self.settings.set("chess/draws", self.settings.get_int("chess/draws") + 1)
-            outcome = "Ничья"
-        best = self.settings.get_int("chess/best_elo")
-        if new_elo > best:
-            self.settings.set("chess/best_elo", new_elo)
-        self.settings.save()
+            games = self.settings.get_int("chess/games") + 1
+            self.settings.set("chess/elo", new_elo)
+            self.settings.set("chess/games", games)
+            if winner == "human":
+                self.settings.set("chess/wins", self.settings.get_int("chess/wins") + 1)
+                outcome = "Победа!"
+            elif winner == "bot":
+                self.settings.set("chess/losses", self.settings.get_int("chess/losses") + 1)
+                outcome = "Поражение"
+            else:
+                self.settings.set("chess/draws", self.settings.get_int("chess/draws") + 1)
+                outcome = "Ничья"
+            best = self.settings.get_int("chess/best_elo")
+            if new_elo > best:
+                self.settings.set("chess/best_elo", new_elo)
+            self.settings.save()
 
-        sign = "+" if self._last_delta > 0 else ""
-        self.status.setText(
-            f"{outcome}  Рейтинг: {new_elo} ({sign}{self._last_delta})")
-        self._update_elo_card()
+            sign = "+" if self._last_delta > 0 else ""
+            self.status.setText(
+                f"{outcome}  Рейтинг: {new_elo} ({sign}{self._last_delta})")
+            self._update_elo_card()
+        except Exception:  # noqa: BLE001
+            pass

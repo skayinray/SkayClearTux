@@ -13,9 +13,9 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QFileDialog, QFrame, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
-                               QPushButton, QScrollArea, QSpinBox, QTabWidget,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget)
+                               QProgressBar, QPushButton, QScrollArea, QSpinBox,
+                               QTabWidget, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from . import system_tools as st
 from .cleaner import human
@@ -1467,3 +1467,221 @@ class HelpPage(QWidget):
         scroll.setWidget(holder)
         root.addWidget(scroll, 1)
 
+
+
+# =========================================================================== #
+class FocusPage(QWidget):
+    """Таймер фокуса (Pomodoro): работа/перерыв, прогресс и пресеты."""
+
+    PRESETS = [
+        ("25 / 5", 25, 5),
+        ("50 / 10", 50, 10),
+        ("15 / 3", 15, 3),
+    ]
+
+    def __init__(self, settings=None, parent=None):
+        super().__init__(parent)
+        self.settings = settings
+        self._mode = "work"  # work | break
+        self._running = False
+        self._remaining = 25 * 60
+        self._total = 25 * 60
+        self._work_min = 25
+        self._break_min = 5
+        self._cycles = 0
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(14)
+        root.addWidget(title("Фокус"))
+        root.addWidget(dim(
+            "Таймер концентрации: чередуйте работу и отдых. "
+            "Выберите пресет или задайте своё время."))
+
+        top = QHBoxLayout()
+        top.setSpacing(14)
+
+        main = card()
+        ml = QVBoxLayout(main)
+        ml.setContentsMargins(22, 20, 22, 20)
+        ml.setSpacing(8)
+        self.mode_label = QLabel("Режим: работа")
+        self.mode_label.setObjectName("CardTitle")
+        ml.addWidget(self.mode_label, alignment=Qt.AlignCenter)
+        self.time_label = QLabel("25:00")
+        self.time_label.setObjectName("Metric")
+        self.time_label.setAlignment(Qt.AlignCenter)
+        ml.addWidget(self.time_label)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1000)
+        self.progress.setValue(1000)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(14)
+        ml.addWidget(self.progress)
+        self.cycle_label = QLabel("Завершено циклов: 0")
+        self.cycle_label.setObjectName("Dim")
+        self.cycle_label.setAlignment(Qt.AlignCenter)
+        ml.addWidget(self.cycle_label)
+
+        btns = QHBoxLayout()
+        btns.setSpacing(10)
+        self.btn_start = QPushButton("Старт")
+        self.btn_start.setObjectName("Accent")
+        self.btn_start.clicked.connect(self.toggle)
+        self.btn_reset = QPushButton("Сброс")
+        self.btn_reset.clicked.connect(self.reset)
+        self.btn_skip = QPushButton("Пропустить этап")
+        self.btn_skip.clicked.connect(self.skip)
+        btns.addStretch(1)
+        btns.addWidget(self.btn_start)
+        btns.addWidget(self.btn_reset)
+        btns.addWidget(self.btn_skip)
+        btns.addStretch(1)
+        ml.addLayout(btns)
+        top.addWidget(main, 2)
+
+        side = card()
+        sl = QVBoxLayout(side)
+        sl.setContentsMargins(18, 16, 18, 16)
+        sl.setSpacing(10)
+        sl.addWidget(QLabel("Пресеты"))
+        for name, w, b in self.PRESETS:
+            btn = QPushButton(name)
+            btn.clicked.connect(lambda _=False, w=w, b=b: self.apply_preset(w, b))
+            sl.addWidget(btn)
+        sl.addSpacing(6)
+        sl.addWidget(QLabel("Свои интервалы (мин)"))
+
+        row_w = QHBoxLayout()
+        row_w.addWidget(QLabel("Работа"))
+        self.spin_work = QSpinBox()
+        self.spin_work.setRange(1, 180)
+        self.spin_work.setValue(25)
+        row_w.addWidget(self.spin_work)
+        row_w.addStretch(1)
+        sl.addLayout(row_w)
+
+        row_b = QHBoxLayout()
+        row_b.addWidget(QLabel("Перерыв"))
+        self.spin_break = QSpinBox()
+        self.spin_break.setRange(1, 60)
+        self.spin_break.setValue(5)
+        row_b.addWidget(self.spin_break)
+        row_b.addStretch(1)
+        sl.addLayout(row_b)
+
+        btn_apply = QPushButton("Применить")
+        btn_apply.clicked.connect(self.apply_custom)
+        sl.addWidget(btn_apply)
+        sl.addStretch(1)
+
+        tip = QLabel("Совет: 25 минут работы и 5 минут отдыха — классический ритм Pomodoro.")
+        tip.setObjectName("Dim")
+        tip.setWordWrap(True)
+        sl.addWidget(tip)
+
+        top.addWidget(side, 1)
+        root.addLayout(top, 1)
+        root.addStretch(0)
+        self._update_ui()
+
+    # --------------------------------------------------------------- логика
+    def apply_preset(self, work: int, brk: int) -> None:
+        self.spin_work.setValue(work)
+        self.spin_break.setValue(brk)
+        self._work_min, self._break_min = work, brk
+        self._mode = "work"
+        self._set_duration(work * 60)
+        self._stop_running()
+        self._update_ui()
+
+    def apply_custom(self) -> None:
+        self._work_min = self.spin_work.value()
+        self._break_min = self.spin_break.value()
+        self._mode = "work"
+        self._set_duration(self._work_min * 60)
+        self._stop_running()
+        self._update_ui()
+
+    def _set_duration(self, seconds: int) -> None:
+        self._total = max(1, int(seconds))
+        self._remaining = self._total
+
+    def toggle(self) -> None:
+        if self._running:
+            self._stop_running()
+        else:
+            self._running = True
+            self._timer.start(1000)
+            self.btn_start.setText("Пауза")
+        self._update_ui()
+
+    def _stop_running(self) -> None:
+        self._running = False
+        self._timer.stop()
+        self.btn_start.setText("Старт")
+
+    def reset(self) -> None:
+        self._stop_running()
+        self._mode = "work"
+        self._cycles = 0
+        self._work_min = self.spin_work.value()
+        self._break_min = self.spin_break.value()
+        self._set_duration(self._work_min * 60)
+        self._update_ui()
+
+    def skip(self) -> None:
+        self._finish_stage(announce=False)
+
+    def _tick(self) -> None:
+        if self._remaining > 0:
+            self._remaining -= 1
+            self._update_ui()
+            if self._remaining <= 0:
+                self._finish_stage(announce=True)
+
+    def _finish_stage(self, announce: bool = True) -> None:
+        if self._mode == "work":
+            self._cycles += 1
+            self._mode = "break"
+            self._set_duration(self._break_min * 60)
+            if announce:
+                self._notify("Время перерыва", "Отличная работа! Сделайте короткий отдых.")
+        else:
+            self._mode = "work"
+            self._set_duration(self._work_min * 60)
+            if announce:
+                self._notify("Время работать", "Перерыв окончен — можно продолжать.")
+        # продолжаем, если таймер был запущен
+        if not self._running:
+            self.btn_start.setText("Старт")
+        self._update_ui()
+
+    def _notify(self, title: str, text: str) -> None:
+        try:
+            from PySide6.QtWidgets import QApplication
+            QApplication.beep()
+        except Exception:  # noqa: BLE001
+            pass
+        win = self.window()
+        tray = getattr(win, "_tray", None)
+        if tray is not None:
+            try:
+                from PySide6.QtWidgets import QSystemTrayIcon
+                tray.showMessage("SkayClearTux · Фокус", f"{title}: {text}",
+                                 QSystemTrayIcon.Information, 5000)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _update_ui(self) -> None:
+        m, s = divmod(max(0, self._remaining), 60)
+        self.time_label.setText(f"{m:02d}:{s:02d}")
+        mode_text = "Режим: работа" if self._mode == "work" else "Режим: перерыв"
+        self.mode_label.setText(mode_text)
+        self.cycle_label.setText(f"Завершено циклов: {self._cycles}")
+        ratio = 0 if self._total <= 0 else self._remaining / self._total
+        self.progress.setValue(int(ratio * 1000))
+        self.btn_start.setText("Пауза" if self._running else "Старт")

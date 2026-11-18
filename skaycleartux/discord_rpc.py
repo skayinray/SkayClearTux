@@ -18,7 +18,7 @@ import threading
 import time
 
 # Можно «зашить» свой Application ID сюда, чтобы активность работала из коробки.
-BUILTIN_CLIENT_ID = ""
+BUILTIN_CLIENT_ID = "1571917686869331969"
 
 OP_HANDSHAKE = 0
 OP_FRAME = 1

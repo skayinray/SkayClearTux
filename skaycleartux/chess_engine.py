@@ -164,9 +164,15 @@ class Board:
     # --------------------------------------------------------------- атака
     def king_sq(self, c: str) -> int:
         target = "K" if c == "w" else "k"
-        return self.sq.index(target)
+        try:
+            return self.sq.index(target)
+        except ValueError:
+            # повреждённое состояние — не даём движку упасть
+            return -1
 
     def attacked(self, square: int, by: str) -> bool:
+        if square < 0 or square > 63:
+            return False
         r0, f0 = rk(square), fl(square)
         # пешки
         dr = 1 if by == "w" else -1  # пешка бьёт "вверх" (dr=-1 в индексах белых)
@@ -210,7 +216,10 @@ class Board:
         return False
 
     def in_check(self, c: str) -> bool:
-        return self.attacked(self.king_sq(c), "b" if c == "w" else "w")
+        k = self.king_sq(c)
+        if k < 0:
+            return False
+        return self.attacked(k, "b" if c == "w" else "w")
 
     # --------------------------------------------------------------- ходы
     def _add_pawn(self, i: int, moves: list) -> None:
@@ -432,7 +441,10 @@ class Board:
     # ------------------------------------------------------------- статус
     def status(self) -> tuple[str, str]:
         """('play'|'checkmate'|'stalemate'|'draw', текст)."""
-        moves = self.legal_moves()
+        try:
+            moves = self.legal_moves()
+        except Exception:  # noqa: BLE001
+            return "draw", "Ошибка позиции"
         if not moves:
             if self.in_check(self.turn):
                 winner = "Чёрные" if self.turn == "w" else "Белые"

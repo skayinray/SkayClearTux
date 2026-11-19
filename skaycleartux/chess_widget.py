@@ -23,8 +23,14 @@ def piece_pixmap(piece: str, size: int) -> QPixmap:
     pm = _PIECE_CACHE.get(key)
     if pm is None:
         color = "w" if piece.isupper() else "b"
-        pm = QPixmap(asset(f"pieces/{color}{piece.upper()}.png")).scaled(
-            size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        path = asset(f"pieces/{color}{piece.upper()}.png")
+        pm = QPixmap(path)
+        if not pm.isNull():
+            pm = pm.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        else:
+            # запасной вариант, чтобы не падать при отсутствии ассета
+            pm = QPixmap(max(1, size), max(1, size))
+            pm.fill(Qt.transparent)
         _PIECE_CACHE[key] = pm
     return pm
 
@@ -45,7 +51,10 @@ class BotThread(QThread):
             mv = board.best_move(self.depth, self.time_limit)
         except Exception:  # noqa: BLE001
             mv = None
-        self.done.emit(self.token, mv)
+        try:
+            self.done.emit(self.token, mv)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class AnalysisThread(QThread):
@@ -53,7 +62,7 @@ class AnalysisThread(QThread):
 
     def __init__(self, fen: str, move: tuple[int, int, str], token: int,
                  move_index: int, depth: int = 2,
-                 time_limit: float | None = 0.35):
+                 time_limit: float | None = 0.2):
         super().__init__()
         self.fen = fen
         self.move = move
@@ -68,7 +77,10 @@ class AnalysisThread(QThread):
             result = board.analyze_move(self.move, self.depth, self.time_limit)
         except Exception:  # noqa: BLE001
             result = {}
-        self.done.emit(self.token, self.move_index, result)
+        try:
+            self.done.emit(self.token, self.move_index, result)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class BoardView(QWidget):
@@ -123,84 +135,107 @@ class BoardView(QWidget):
 
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        p.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        sq, ox, oy = self._metrics()
+        try:
+            p.setRenderHint(QPainter.Antialiasing, True)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            sq, ox, oy = self._metrics()
+            if sq <= 0:
+                return
+            game = getattr(self, "game", None)
+            if game is None:
+                return
 
-        for i in range(64):
-            rect = self._rect(i, sq, ox, oy)
-            r, f = i // 8, i % 8
-            base = self.light if (r + f) % 2 == 0 else self.dark
-            col = QColor(base)
-            if self.selected == i:
-                col = col.lighter(135)
-            p.fillRect(rect, col)
-            if self.highlight_last and self.last_move and i in self.last_move:
-                p.fillRect(rect, QColor(255, 235, 130, 80))
-            if self.hint_move and i in self.hint_move:
-                p.fillRect(rect, QColor(120, 200, 120, 90))
-            if self.premove and i in self.premove:
-                p.fillRect(rect, QColor(220, 90, 90, 110))
-            if self.check_sq == i:
-                p.fillRect(rect, QColor(255, 70, 70, 110))
+            for i in range(64):
+                rect = self._rect(i, sq, ox, oy)
+                r, f = i // 8, i % 8
+                base = self.light if (r + f) % 2 == 0 else self.dark
+                col = QColor(base)
+                if self.selected == i:
+                    col = col.lighter(135)
+                p.fillRect(rect, col)
+                if self.highlight_last and self.last_move and i in self.last_move:
+                    p.fillRect(rect, QColor(255, 235, 130, 80))
+                if self.hint_move and i in self.hint_move:
+                    p.fillRect(rect, QColor(120, 200, 120, 90))
+                if self.premove and i in self.premove:
+                    p.fillRect(rect, QColor(220, 90, 90, 110))
+                if self.check_sq == i:
+                    p.fillRect(rect, QColor(255, 70, 70, 110))
 
-        # координаты
-        if self.show_coords:
-            p.setPen(QColor(0, 0, 0, 110))
-            fnt = QFont("DejaVu Sans")
-            fnt.setPixelSize(max(9, int(sq * 0.17)))
-            fnt.setBold(True)
-            p.setFont(fnt)
-            files = "abcdefgh"
-            for k in range(8):
-                sc = 7 - k if self.flipped else k
-                sr = 7 if not self.flipped else 0
-                p.drawText(self._rect(sr * 8 + sc, sq, ox, oy).adjusted(4, 0, 0, -3),
-                           Qt.AlignLeft | Qt.AlignBottom, files[sc])
-                rank = 8 - (7 - k if self.flipped else k)
-                p.drawText(self._rect((7 - k) * 8, sq, ox, oy).adjusted(0, 3, -4, 0),
-                           Qt.AlignRight | Qt.AlignTop, str(rank))
+            # координаты
+            if self.show_coords:
+                p.setPen(QColor(0, 0, 0, 110))
+                fnt = QFont("DejaVu Sans")
+                fnt.setPixelSize(max(9, int(sq * 0.17)))
+                fnt.setBold(True)
+                p.setFont(fnt)
+                files = "abcdefgh"
+                for k in range(8):
+                    sc = 7 - k if self.flipped else k
+                    sr = 7 if not self.flipped else 0
+                    p.drawText(self._rect(sr * 8 + sc, sq, ox, oy).adjusted(4, 0, 0, -3),
+                               Qt.AlignLeft | Qt.AlignBottom, files[sc])
+                    rank = 8 - (7 - k if self.flipped else k)
+                    p.drawText(self._rect((7 - k) * 8, sq, ox, oy).adjusted(0, 3, -4, 0),
+                               Qt.AlignRight | Qt.AlignTop, str(rank))
 
-        # подсказки ходов
-        if self.show_hints:
-            for t in self.targets:
-                rect = self._rect(t, sq, ox, oy)
-                if self.game.sq[t]:
-                    p.setPen(QPen(QColor(50, 50, 50, 160), max(2.0, sq * 0.06)))
-                    p.setBrush(Qt.NoBrush)
-                    p.drawEllipse(rect.adjusted(sq * 0.06, sq * 0.06,
-                                                -sq * 0.06, -sq * 0.06))
-                else:
-                    p.setPen(Qt.NoPen)
-                    p.setBrush(QBrush(QColor(50, 50, 50, 120)))
-                    d = sq * 0.16
-                    p.drawEllipse(rect.center(), d, d)
+            # подсказки ходов
+            if self.show_hints:
+                board_sq = getattr(game, "sq", [])
+                for t in self.targets:
+                    rect = self._rect(t, sq, ox, oy)
+                    if 0 <= t < len(board_sq) and board_sq[t]:
+                        p.setPen(QPen(QColor(50, 50, 50, 160), max(2.0, sq * 0.06)))
+                        p.setBrush(Qt.NoBrush)
+                        p.drawEllipse(rect.adjusted(sq * 0.06, sq * 0.06,
+                                                    -sq * 0.06, -sq * 0.06))
+                    else:
+                        p.setPen(Qt.NoPen)
+                        p.setBrush(QBrush(QColor(50, 50, 50, 120)))
+                        d = sq * 0.16
+                        p.drawEllipse(rect.center(), d, d)
 
-        # фигуры
-        size = int(round(sq * 0.94))
-        anim_to = self._anim["to"] if self._anim else None
-        for i, piece in enumerate(self.game.sq):
-            if not piece or i == anim_to:
-                continue
-            rect = self._rect(i, sq, ox, oy)
-            pm = piece_pixmap(piece, size)
-            p.drawPixmap(int(rect.x() + (rect.width() - pm.width()) / 2),
-                         int(rect.y() + (rect.height() - pm.height()) / 2), pm)
-        # движущаяся фигура
-        if self._anim:
-            frm = self._rect(self._anim["frm"], sq, ox, oy).center()
-            to = self._rect(self._anim["to"], sq, ox, oy).center()
-            t = self._anim_progress
-            cx = frm.x() + (to.x() - frm.x()) * t
-            cy = frm.y() + (to.y() - frm.y()) * t
-            pm = piece_pixmap(self._anim["piece"], size)
-            p.drawPixmap(int(cx - pm.width() / 2), int(cy - pm.height() / 2), pm)
+            # фигуры
+            size = int(round(sq * 0.94))
+            anim = self._anim
+            anim_to = anim.get("to") if isinstance(anim, dict) else None
+            for i, piece in enumerate(getattr(game, "sq", [])):
+                if not piece or i == anim_to:
+                    continue
+                rect = self._rect(i, sq, ox, oy)
+                pm = piece_pixmap(piece, size)
+                if pm.isNull():
+                    continue
+                p.drawPixmap(int(rect.x() + (rect.width() - pm.width()) / 2),
+                             int(rect.y() + (rect.height() - pm.height()) / 2), pm)
+            # движущаяся фигура
+            if isinstance(anim, dict):
+                try:
+                    frm = self._rect(anim["frm"], sq, ox, oy).center()
+                    to = self._rect(anim["to"], sq, ox, oy).center()
+                    t = float(self._anim_progress)
+                    cx = frm.x() + (to.x() - frm.x()) * t
+                    cy = frm.y() + (to.y() - frm.y()) * t
+                    pm = piece_pixmap(anim["piece"], size)
+                    if not pm.isNull():
+                        p.drawPixmap(int(cx - pm.width() / 2), int(cy - pm.height() / 2), pm)
+                except Exception:  # noqa: BLE001
+                    pass
 
-        # значок качества хода (в углу клетки назначения), как в chess.com
-        if self.move_badge:
-            bsq, blabel = self.move_badge
-            self._draw_move_badge(p, bsq, blabel, sq, ox, oy)
-        p.end()
+            # значок качества хода (в углу клетки назначения), как в chess.com
+            if self.move_badge:
+                try:
+                    bsq, blabel = self.move_badge
+                    self._draw_move_badge(p, bsq, blabel, sq, ox, oy)
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            try:
+                p.end()
+            except Exception:  # noqa: BLE001
+                pass
 
     def _draw_move_badge(self, p: QPainter, i: int, label: str,
                          sq: float, ox: float, oy: float) -> None:
@@ -255,7 +290,10 @@ class BoardView(QWidget):
         self.update()
 
     def _on_anim(self, value) -> None:
-        self._anim_progress = float(value)
+        try:
+            self._anim_progress = float(value)
+        except Exception:  # noqa: BLE001
+            self._anim_progress = 0.0
         self.update()
 
     def _anim_finished(self) -> None:
@@ -276,9 +314,11 @@ class PromotionDialog(QDialog):
         self.choice = "q"
         lay = QHBoxLayout(self)
         lay.setSpacing(8)
+        is_white = str(color).isupper()
         for code in "qrbn":
             b = QPushButton()
-            b.setIcon(piece_pixmap(code.upper() if color == "w" else code, 64))
+            piece = code.upper() if is_white else code
+            b.setIcon(piece_pixmap(piece, 64))
             b.setIconSize(QSize(56, 56))
             b.setFixedSize(76, 76)
             b.clicked.connect(lambda _=False, c=code: self._pick(c))
@@ -302,6 +342,7 @@ class ChessPage(QWidget):
         self._analysis_thread: AnalysisThread | None = None
         self._analysis_queue: list[tuple[int, str, tuple[int, int, str], str, int]] = []
         self._analysis_target: tuple[int, int] | None = None
+        self._threads_keep: set[QThread] = set()
         self._mode = "bot"
         self._result_recorded = False
         self._last_delta = 0
@@ -418,7 +459,10 @@ class ChessPage(QWidget):
         return self.view.game.turn == self.human
 
     def _piece_is_human(self, i: int) -> bool:
-        piece = self.view.game.sq[i]
+        try:
+            piece = self.view.game.sq[i]
+        except Exception:  # noqa: BLE001
+            return False
         if not piece:
             return False
         return (piece.isupper() and self.human == "w") or (
@@ -616,7 +660,7 @@ class ChessPage(QWidget):
             return
         self.status.setText("Бот думает…")
         self.view.interactive = False
-        depth = self.LEVELS.get(self.level.currentText(), 2)
+        depth = self._bot_depth()
         self._run_engine("bot", depth)
 
     def _hint(self) -> None:
@@ -625,34 +669,73 @@ class ChessPage(QWidget):
         if self.view.game.turn != self.human or self.view.game.status()[0] != "play":
             return
         self.status.setText("Ищу подсказку…")
-        depth = max(2, self.LEVELS.get(self.level.currentText(), 2))
+        depth = min(3, max(2, self.LEVELS.get(self.level.currentText(), 2)))
         self._run_engine("hint", depth)
 
     def _time_limit_for_depth(self, depth: int) -> float | None:
-        # Лимит времени делает высокие сложности отзывчивыми
+        # Ограничиваем время, чтобы высокие сложности не "подвешивали" интерфейс
         if depth >= 4:
-            return 1.8
+            return 1.0
         if depth >= 3:
-            return 1.2
+            return 0.8
+        if depth >= 2:
+            return 0.5
         return None
+
+    def _bot_depth(self) -> int:
+        depth = self.LEVELS.get(self.level.currentText(), 2)
+        # на "Сложно" держим разумную глубину (итеративное углубление упирается в лимит)
+        if depth >= 4:
+            return 4
+        return depth
+
+    def _track_thread(self, thread: QThread) -> None:
+        self._threads_keep.add(thread)
+
+        def _cleanup(thr=thread):
+            self._threads_keep.discard(thr)
+            try:
+                thr.deleteLater()
+            except Exception:  # noqa: BLE001
+                pass
+
+        try:
+            thread.finished.connect(_cleanup)
+        except Exception:  # noqa: BLE001
+            _cleanup(thread)
 
     def _run_engine(self, mode: str, depth: int) -> None:
         self._mode = mode
         token = self._game_token
-        time_limit = self._time_limit_for_depth(depth) if mode == "bot" else max(
-            0.8, self._time_limit_for_depth(depth) or 0.8)
-        self._thread = BotThread(self.view.game.fen(), depth, token, time_limit)
-        self._thread.done.connect(self._on_engine_result)
-        self._thread.start()
+        if mode == "bot":
+            time_limit = self._time_limit_for_depth(depth)
+        else:
+            time_limit = max(0.35, (self._time_limit_for_depth(depth) or 0.45))
+            depth = min(depth, 3)
+        try:
+            thread = BotThread(self.view.game.fen(), depth, token, time_limit)
+            self._track_thread(thread)
+            self._thread = thread
+            thread.done.connect(self._on_engine_result)
+            thread.start()
+        except Exception:  # noqa: BLE001
+            self._thread = None
+            self.view.interactive = True
+            self._update_status()
 
     def _on_engine_result(self, token: int, mv) -> None:
         try:
             self._handle_engine_result(token, mv)
+        except RuntimeError:
+            return
         except Exception:  # noqa: BLE001
-            if token == self._game_token and self._mode == "bot":
-                self.view.interactive = True
-            self._update_status()
-            self.view.update()
+            try:
+                if token == self._game_token and self._mode == "bot":
+                    self.view.interactive = True
+                self._update_status()
+                self.view.update()
+            except Exception:  # noqa: BLE001
+                pass
 
     def _handle_engine_result(self, token: int, mv) -> None:
         if token != self._game_token:
@@ -714,18 +797,28 @@ class ChessPage(QWidget):
     def _start_next_analysis(self) -> None:
         if self._bot_running():
             return
-        if self._analysis_thread and self._analysis_thread.isRunning():
-            return
+        try:
+            if self._analysis_thread and self._analysis_thread.isRunning():
+                return
+        except RuntimeError:
+            self._analysis_thread = None
         if not self._analysis_queue:
             return
-        move_index, fen_before, move, _base, to_sq = self._analysis_queue.pop(0)
-        depth = 2 if self.LEVELS.get(self.level.currentText(), 2) >= 3 else 2
+        # анализируем только самый свежий ход, старые пропускаем
+        move_index, fen_before, move, _base, to_sq = self._analysis_queue[-1]
+        self._analysis_queue.clear()
+        depth = 2
         self._analysis_target = (move_index, to_sq)
-        # очень короткий бюджет, чтобы не создавать лаги
-        self._analysis_thread = AnalysisThread(
-            fen_before, move, self._game_token, move_index, depth=depth, time_limit=0.35)
-        self._analysis_thread.done.connect(self._on_analysis_done)
-        self._analysis_thread.start()
+        # очень короткий бюджет, чтобы не создавать лаги на сложных позициях
+        try:
+            thread = AnalysisThread(
+                fen_before, move, self._game_token, move_index, depth=depth, time_limit=0.18)
+            self._track_thread(thread)
+            self._analysis_thread = thread
+            thread.done.connect(self._on_analysis_done)
+            thread.start()
+        except Exception:  # noqa: BLE001
+            self._analysis_thread = None
 
     def _on_analysis_done(self, token: int, move_index: int, result) -> None:
         try:
@@ -749,10 +842,15 @@ class ChessPage(QWidget):
                     and move_index == self.moves.count() - 1):
                 self.view.move_badge = (target[1], label)
                 self.view.update()
+        except RuntimeError:
+            return
         except Exception:  # noqa: BLE001
             pass
         finally:
-            self._start_next_analysis()
+            try:
+                self._start_next_analysis()
+            except Exception:  # noqa: BLE001
+                pass
 
     def _update_status(self) -> None:
         try:

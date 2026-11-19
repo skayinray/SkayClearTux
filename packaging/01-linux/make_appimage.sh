@@ -2,7 +2,7 @@
 # Сборка AppImage SkayClearTux.
 #
 # Требуется: собранный бандл PyInstaller в dist/SkayClearTux и appimagetool.
-#   VERSION=1.5.1 bash packaging/01-linux/make_appimage.sh
+#   VERSION=1.5.2 bash packaging/01-linux/make_appimage.sh
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -12,9 +12,9 @@ APPDIR="$BUILD/SkayClearTux.AppDir"
 NAME="SkayClearTux"
 
 if [ -z "${VERSION:-}" ] && [ -f "$ROOT/skaycleartux/__init__.py" ]; then
-    VERSION="$(python3 -c 'import re, pathlib; t=pathlib.Path("'"$ROOT"'/skaycleartux/__init__.py").read_text(); m=re.search(r"__version__\s*=\s*\"([^\"]+)\"", t); print(m.group(1) if m else "1.5.1")' 2>/dev/null || true)"
+    VERSION="$(python3 -c 'import re, pathlib; t=pathlib.Path("'"$ROOT"'/skaycleartux/__init__.py").read_text(); m=re.search(r"__version__\s*=\s*\"([^\"]+)\"", t); print(m.group(1) if m else "1.5.2")' 2>/dev/null || true)"
 fi
-VER="${VERSION:-1.5.1}"
+VER="${VERSION:-1.5.2}"
 
 if [ ! -d "$ROOT/dist/$NAME" ]; then
     echo "Нет dist/$NAME — сначала соберите бандл PyInstaller."

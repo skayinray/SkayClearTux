@@ -453,10 +453,30 @@ class ChessPage(QWidget):
 
     # ------------------------------------------------------------ служебное
     def _bot_running(self) -> bool:
-        return bool(self._thread and self._thread.isRunning())
+        thr = getattr(self, "_thread", None)
+        if not thr:
+            return False
+        try:
+            return bool(thr.isRunning())
+        except RuntimeError:
+            self._thread = None
+            return False
+
+    def _analysis_running(self) -> bool:
+        thr = getattr(self, "_analysis_thread", None)
+        if not thr:
+            return False
+        try:
+            return bool(thr.isRunning())
+        except RuntimeError:
+            self._analysis_thread = None
+            return False
 
     def _is_human_turn(self) -> bool:
-        return self.view.game.turn == self.human
+        try:
+            return self.view.game.turn == self.human
+        except Exception:
+            return False
 
     def _piece_is_human(self, i: int) -> bool:
         try:
@@ -716,11 +736,20 @@ class ChessPage(QWidget):
             thread = BotThread(self.view.game.fen(), depth, token, time_limit)
             self._track_thread(thread)
             self._thread = thread
+            try:
+                thread.finished.connect(
+                    lambda thr=thread: setattr(self, "_thread", None)
+                    if getattr(self, "_thread", None) is thr else None)
+            except Exception:  # noqa: BLE001
+                pass
             thread.done.connect(self._on_engine_result)
             thread.start()
         except Exception:  # noqa: BLE001
             self._thread = None
-            self.view.interactive = True
+            try:
+                self.view.interactive = True
+            except Exception:  # noqa: BLE001
+                pass
             self._update_status()
 
     def _on_engine_result(self, token: int, mv) -> None:
@@ -743,29 +772,34 @@ class ChessPage(QWidget):
         g = self.view.game
         if self._mode == "bot":
             self.view.interactive = True
-            if mv and g.status()[0] == "play" and g.turn != self.human:
-                frm, to, promo = mv
-                options = [m for m in g.moves_from(frm) if m[1] == to]
-                if options:
-                    # на случай, если движок вернул ход без уточнения превращения
-                    if not any(m[2] == promo for m in options):
-                        promo = options[0][2]
-                    move = (frm, to, promo)
-                    fen_before = g.fen()
-                    g.make_move(move)
-                    self._after_move(frm, to, fen_before, move)
-                    # после хода бота пробуем премув (если теперь ход человека)
-                    self._try_premove()
-            self._update_status()
-            self.view.update()
-            self._start_next_analysis()
-        else:
-            if mv and g.status()[0] == "play":
-                self.view.hint_move = (mv[0], mv[1])
-                self.status.setText(
-                    f"Подсказка: {sq_name(mv[0])}–{sq_name(mv[1])}")
+            try:
+                if mv and g.status()[0] == "play" and g.turn != self.human:
+                    frm, to, promo = mv
+                    options = [m for m in g.moves_from(frm) if m[1] == to]
+                    if options:
+                        # на случай, если движок вернул ход без уточнения превращения
+                        if not any(m[2] == promo for m in options):
+                            promo = options[0][2]
+                        move = (frm, to, promo)
+                        fen_before = g.fen()
+                        g.make_move(move)
+                        self._after_move(frm, to, fen_before, move)
+                        # после хода бота пробуем премув (если теперь ход человека)
+                        self._try_premove()
+            finally:
+                self._update_status()
                 self.view.update()
-            else:
+                self._start_next_analysis()
+        else:
+            try:
+                if mv and g.status()[0] == "play":
+                    self.view.hint_move = (mv[0], mv[1])
+                    self.status.setText(
+                        f"Подсказка: {sq_name(mv[0])}–{sq_name(mv[1])}")
+                    self.view.update()
+                else:
+                    self._update_status()
+            except Exception:  # noqa: BLE001
                 self._update_status()
 
     def _after_move(self, frm: int, to: int, fen_before: str | None = None,
@@ -797,11 +831,8 @@ class ChessPage(QWidget):
     def _start_next_analysis(self) -> None:
         if self._bot_running():
             return
-        try:
-            if self._analysis_thread and self._analysis_thread.isRunning():
-                return
-        except RuntimeError:
-            self._analysis_thread = None
+        if self._analysis_running():
+            return
         if not self._analysis_queue:
             return
         # анализируем только самый свежий ход, старые пропускаем
@@ -815,6 +846,12 @@ class ChessPage(QWidget):
                 fen_before, move, self._game_token, move_index, depth=depth, time_limit=0.18)
             self._track_thread(thread)
             self._analysis_thread = thread
+            try:
+                thread.finished.connect(
+                    lambda thr=thread: setattr(self, "_analysis_thread", None)
+                    if getattr(self, "_analysis_thread", None) is thr else None)
+            except Exception:  # noqa: BLE001
+                pass
             thread.done.connect(self._on_analysis_done)
             thread.start()
         except Exception:  # noqa: BLE001

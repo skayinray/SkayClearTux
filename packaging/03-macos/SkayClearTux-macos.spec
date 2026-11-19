@@ -57,8 +57,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'SkayClearTux',
         'CFBundleDisplayName': 'SkayClearTux',
-        'CFBundleShortVersionString': '1.5.3',
-        'CFBundleVersion': '1.5.3',
+        'CFBundleShortVersionString': '1.5.3.1',
+        'CFBundleVersion': '1.5.3.1',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '11.0',
         'NSRequiresAquaSystemAppearance': False,

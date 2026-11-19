@@ -1,6 +1,8 @@
-# SkayClearTux 1.5.3 — хотфикс зависания шахмат после хода
+# SkayClearTux 1.5.3.1.1 — хотфикс зависания шахмат после хода
 
 Срочный багфикс-релиз: устранено зависание/«замирание» шахмат после первого хода (когда программа продолжала работать, но шахматный экран переставал отвечать).
+
+> Включает исправления из 1.5.3.1/1.5.2; релиз 1.5.3.1 на GitHub не был опубликован из-за конфликта тега, поэтому актуальная сборка — **1.5.3.1.1**.
 
 ---
 
@@ -14,9 +16,9 @@
 
 | Платформа | Файл | Запуск |
 |-----------|------|--------|
-| Linux (любой) | `SkayClearTux-1.5.3-x86_64.AppImage` | `chmod +x` и запустить |
-| Debian/Ubuntu | `SkayClearTux-1.5.3-amd64.deb` | `sudo apt install ./SkayClearTux-1.5.3-amd64.deb` |
-| Fedora/RHEL/openSUSE | `SkayClearTux-1.5.3-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.5.3-x86_64.rpm` |
+| Linux (любой) | `SkayClearTux-1.5.3.1.1-x86_64.AppImage` | `chmod +x` и запустить |
+| Debian/Ubuntu | `SkayClearTux-1.5.3.1.1-amd64.deb` | `sudo apt install ./SkayClearTux-1.5.3.1.1-amd64.deb` |
+| Fedora/RHEL/openSUSE | `SkayClearTux-1.5.3.1.1-x86_64.rpm` | `sudo dnf install ./SkayClearTux-1.5.3.1.1-x86_64.rpm` |
 | Windows | `SkayClearTux-windows.zip` | распаковать, запустить `SkayClearTux.exe` |
 | macOS | `SkayClearTux.dmg` | открыть образ, перетащить в «Программы» |
 

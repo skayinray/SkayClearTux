@@ -3,7 +3,7 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com),
 версии — по [Semantic Versioning](https://semver.org).
 
-## [1.5.3] — 2026-11-19
+## [1.5.3.1] — 2026-11-19
 
 Хотфикс зависания шахмат после хода.
 

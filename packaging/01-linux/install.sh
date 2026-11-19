@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Установка SkayClearTux v1.5.3 из AppImage (любой современный Linux).
+# Установка SkayClearTux v1.5.3.1 из AppImage (любой современный Linux).
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

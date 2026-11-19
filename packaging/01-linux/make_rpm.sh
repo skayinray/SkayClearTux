@@ -2,7 +2,7 @@
 # Сборка .rpm-пакета SkayClearTux (Fedora, RHEL, openSUSE и др.).
 #
 # Требуется: собранный бандл PyInstaller в dist/SkayClearTux и rpmbuild.
-#   VERSION=1.5.3 bash packaging/01-linux/make_rpm.sh
+#   VERSION=1.5.3.1 bash packaging/01-linux/make_rpm.sh
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

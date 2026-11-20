@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.colors = themes_mod.THEMES[self.theme_name]
 
         self.setWindowTitle("SkayClearTux")
-        self.setMinimumSize(1000, 660)
+        self.setMinimumSize(860, 560)
         self.setWindowIcon(QIcon(asset("tux.png")))
 
         self.section_items: dict[str, list[QPushButton]] = {}
@@ -230,10 +230,10 @@ class MainWindow(QMainWindow):
     def _sidebar(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("Sidebar")
-        bar.setFixedWidth(244)
+        bar.setFixedWidth(220)
         outer = QVBoxLayout(bar)
-        outer.setContentsMargins(14, 18, 14, 14)
-        outer.setSpacing(10)
+        outer.setContentsMargins(12, 16, 12, 12)
+        outer.setSpacing(8)
 
         brand = QHBoxLayout()
         logo = QLabel()

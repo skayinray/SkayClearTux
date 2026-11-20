@@ -104,19 +104,18 @@ class DashboardPage(QWidget):
         top.addWidget(badge, 0, Qt.AlignTop | Qt.AlignRight)
         hl.addLayout(top)
 
-        hero_row = QHBoxLayout()
-        hero_row.setSpacing(16)
+        hero_row = QVBoxLayout()
+        hero_row.setSpacing(4)
         self.hero_status = QLabel("Система в норме")
         self.hero_status.setObjectName("HeroMetric")
         self.hero_status.setWordWrap(True)
-        hero_row.addWidget(self.hero_status, 1)
+        hero_row.addWidget(self.hero_status)
         hero_hint = QLabel(
             "Следите за нагрузкой и здоровьем системы, сохраняйте отчёт "
             "или запускайте безопасную очистку и оптимизацию памяти в один клик.")
         hero_hint.setObjectName("CardSub")
         hero_hint.setWordWrap(True)
-        hero_hint.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        hero_row.addWidget(hero_hint, 1)
+        hero_row.addWidget(hero_hint)
         hl.addLayout(hero_row)
         root.addWidget(hero)
 

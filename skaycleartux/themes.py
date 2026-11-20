@@ -188,22 +188,22 @@ QPushButton#Nav:checked {{
     border: 1px solid {mix(c['accent'], c['border'], 0.28)};
     border-radius: 24px;
 }}
-#CardTitle {{ font-size: 15px; font-weight: 700; color: {c['text']}; }}
+#CardTitle {{ font-size: 14px; font-weight: 700; color: {c['text']}; }}
 #CardSub {{ font-size: 12px; color: {c['dim']}; }}
-#H1 {{ font-size: 30px; font-weight: 800; color: {c['text']}; letter-spacing: 0.2px; }}
-#H2 {{ font-size: 19px; font-weight: 700; color: {c['text']}; }}
+#H1 {{ font-size: 26px; font-weight: 800; color: {c['text']}; letter-spacing: 0.2px; }}
+#H2 {{ font-size: 18px; font-weight: 700; color: {c['text']}; }}
 #Dim {{ color: {c['dim']}; }}
-#Metric {{ font-size: 30px; font-weight: 800; color: {c['accent']}; }}
-#HeroMetric {{ font-size: 34px; font-weight: 900; color: {c['accent']}; }}
+#Metric {{ font-size: 26px; font-weight: 800; color: {c['accent']}; }}
+#HeroMetric {{ font-size: 28px; font-weight: 900; color: {c['accent']}; }}
 #MetricLabel {{ font-size: 12px; color: {c['dim']}; }}
 #Badge {{
     background: {mix(c['accent'], c['card2'], 0.16)};
     color: {c['text']};
     border: 1px solid {mix(c['accent'], c['border'], 0.30)};
     border-radius: 999px;
-    padding: 5px 12px;
+    padding: 4px 10px;
     font-weight: 700;
-    font-size: 12px;
+    font-size: 11px;
 }}
 #Bar {{ border-radius: 2px; }}
 

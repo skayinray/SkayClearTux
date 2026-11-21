@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "skaycleartux"
 version = "1.5.3.2"
-description = "Кроссплатформенный системный помощник для Linux, macOS и Windows: очистка, мониторинг, инструменты и шахматы"
+description = "Cross-desktop system toolbox for Linux, macOS and Windows: cleanup, monitoring, utilities and offline chess"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "skayinray", email = "officialidea78@gmail.com" }]
-keywords = ["system", "cleaner", "monitor", "linux", "macos", "windows", "pyside6", "qt"]
+keywords = ["system-utilities", "cleaner", "monitoring", "linux", "macos", "windows", "pyside6", "qt"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: X11 Applications :: Qt",
@@ -25,7 +25,10 @@ classifiers = [
     "Topic :: System :: Systems Administration",
     "Topic :: Utilities",
 ]
-dependencies = ["PySide6>=6.6"]
+dependencies = [
+    "PySide6-Essentials>=6.6",
+    "cryptography>=42.0",
+]
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.0", "pillow>=10.0"]

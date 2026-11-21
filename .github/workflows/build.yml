@@ -51,7 +51,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-          pip install pyinstaller pillow
+          python -m pip install "pyinstaller>=6.0" pillow
 
       - name: Проверка синтаксиса и дымовой тест
         if: matrix.os == 'ubuntu-latest'
@@ -66,11 +66,33 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         env:
           VERSION: ${{ env.VERSION }}
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           set -e
           pyinstaller --noconfirm --clean --windowed \
             --name SkayClearTux \
             --add-data "skaycleartux/assets:skaycleartux/assets" \
+            --exclude-module PySide6.QtQml \
+            --exclude-module PySide6.QtQuick \
+            --exclude-module PySide6.QtQuick3D \
+            --exclude-module PySide6.QtMultimedia \
+            --exclude-module PySide6.QtWebEngineCore \
+            --exclude-module PySide6.QtWebEngineWidgets \
+            --exclude-module PySide6.QtWebSockets \
+            --exclude-module PySide6.Qt3DCore \
+            --exclude-module PySide6.QtCharts \
+            --exclude-module PySide6.QtDataVisualization \
+            --exclude-module PySide6.QtPdf \
+            --exclude-module PySide6.QtSql \
+            --exclude-module PySide6.QtTest \
+            --exclude-module PySide6.QtDesigner \
+            --exclude-module PySide6.QtBluetooth \
+            --exclude-module PySide6.QtNfc \
+            --exclude-module PySide6.QtPositioning \
+            --exclude-module PySide6.QtSensors \
+            --exclude-module PySide6.QtSerialPort \
+            --exclude-module PySide6.QtTextToSpeech \
+            --exclude-module tkinter \
             SkayClearTux.py
           mkdir -p build artifacts
           bash packaging/01-linux/make_appimage.sh
@@ -79,13 +101,13 @@ jobs:
           cp build/SkayClearTux-*-x86_64.AppImage artifacts/ 2>/dev/null || true
           cp build/SkayClearTux-*-amd64.deb artifacts/ 2>/dev/null || true
           cp build/SkayClearTux-*-x86_64.rpm artifacts/ 2>/dev/null || true
-          # latest.json для автообновления (AppImage)
-          APPIMAGE=$(ls artifacts/SkayClearTux-*-x86_64.AppImage | head -n1)
+          # Signed latest.json for automatic updates (AppImage).
+          APPIMAGE=$(ls artifacts/SkayClearTux-*-x86_64.AppImage 2>/dev/null | head -n1)
           if [ -n "$APPIMAGE" ]; then
             SHA=$(sha256sum "$APPIMAGE" | awk '{print $1}')
             FILE=$(basename "$APPIMAGE")
             TAG="${GITHUB_REF_NAME:-v${VERSION}}"
-            cat > artifacts/latest.json <<EOF
+            cat > artifacts/latest.unsigned.json <<EOF
           {
             "version": "${VERSION}",
             "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${FILE}",
@@ -94,8 +116,12 @@ jobs:
             "published": "$(date -u +%Y-%m-%d)"
           }
           EOF
-            echo "latest.json:"
-            cat artifacts/latest.json
+            if [ -n "${SIGNING_KEY:-}" ]; then
+              python tools/sign_update.py manifest artifacts/latest.unsigned.json artifacts/latest.json
+            elif [[ "${GITHUB_REF_NAME:-}" == v* ]]; then
+              echo "::error::RELEASE_SIGNING_KEY is required for tagged releases"
+              exit 1
+            fi
           fi
           ls -la artifacts
 
@@ -106,7 +132,29 @@ jobs:
           VERSION: ${{ env.VERSION }}
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name="SkayClearTux" \
-            --add-data "skaycleartux/assets;skaycleartux/assets" SkayClearTux.py
+            --add-data "skaycleartux/assets;skaycleartux/assets" \
+            --exclude-module PySide6.QtQml \
+            --exclude-module PySide6.QtQuick \
+            --exclude-module PySide6.QtQuick3D \
+            --exclude-module PySide6.QtMultimedia \
+            --exclude-module PySide6.QtWebEngineCore \
+            --exclude-module PySide6.QtWebEngineWidgets \
+            --exclude-module PySide6.QtWebSockets \
+            --exclude-module PySide6.Qt3DCore \
+            --exclude-module PySide6.QtCharts \
+            --exclude-module PySide6.QtDataVisualization \
+            --exclude-module PySide6.QtPdf \
+            --exclude-module PySide6.QtSql \
+            --exclude-module PySide6.QtTest \
+            --exclude-module PySide6.QtDesigner \
+            --exclude-module PySide6.QtBluetooth \
+            --exclude-module PySide6.QtNfc \
+            --exclude-module PySide6.QtPositioning \
+            --exclude-module PySide6.QtSensors \
+            --exclude-module PySide6.QtSerialPort \
+            --exclude-module PySide6.QtTextToSpeech \
+            --exclude-module tkinter \
+            SkayClearTux.py
           mkdir -p artifacts
           (cd dist && 7z a ../artifacts/SkayClearTux-windows.zip SkayClearTux) || \
             powershell -Command "Compress-Archive -Path dist/SkayClearTux/* -DestinationPath artifacts/SkayClearTux-windows.zip"
@@ -117,10 +165,30 @@ jobs:
         env:
           VERSION: ${{ env.VERSION }}
         run: |
-          bash packaging/03-macos/build.sh || true
+          set -e
+          bash packaging/03-macos/build.sh
           mkdir -p artifacts
-          cp dist/*.dmg artifacts/ 2>/dev/null || true
-          ls -la artifacts || true
+          cp dist/*.dmg artifacts/
+          ls -la artifacts
+
+      - name: Подписать артефакты релиза
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -e
+          rm -f artifacts/latest.unsigned.json
+          if [ -z "${SIGNING_KEY:-}" ]; then
+            echo "::warning::RELEASE_SIGNING_KEY is not set; artifacts are unsigned"
+            exit 0
+          fi
+          for f in artifacts/*; do
+            case "$f" in
+              *.sig|*latest.unsigned.json) continue ;;
+            esac
+            [ -f "$f" ] || continue
+            python tools/sign_update.py file "$f"
+          done
 
       - name: Загрузить артефакты сборки
         uses: actions/upload-artifact@v4

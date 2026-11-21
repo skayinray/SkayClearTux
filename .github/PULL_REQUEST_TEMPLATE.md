@@ -1,30 +1,28 @@
-<!-- Спасибо за вклад в SkayClearTux! Заполните чек-лист и опишите изменения. -->
+<!-- Describe the change. Keep the checklist. -->
 
-## Что изменено
+## What changed
 
-<!-- Кратко: что и зачем. Если правка закрывает Issue — укажите #номер. -->
+<!-- Short summary and motivation. Link the issue if there is one. -->
 
-Закрывает #
+Closes #
 
-## Как проверено
+## How it was tested
 
-<!-- Команды и результаты. Например:
-     .venv/bin/python -m pytest -q
-     QT_QPA_PLATFORM=offscreen .venv/bin/python tools/smoke_test.py
+<!-- Commands and results, for example:
+     python -m pytest -q
+     QT_QPA_PLATFORM=offscreen python tools/smoke_test.py
 -->
 
-## Чек-лист
+## Checklist
 
-- [ ] Ветка создана от актуального `main`
-- [ ] Код собирается: `python -m compileall -q skaycleartux SkayClearTux.py`
-- [ ] Тесты проходят: `python -m pytest -q`
-- [ ] Дымовой тест проходит: `QT_QPA_PLATFORM=offscreen python tools/smoke_test.py`
-- [ ] Линтер без ошибок: `python -m ruff check skaycleartux tests tools`
-- [ ] Публичный API и структура модулей сохранены (или описано, почему изменены)
-- [ ] Системные вызовы идут через `skaycleartux/backends/`, без `shell=True`
-- [ ] Текст интерфейса на русском, без эмодзи и «квадратных» глифов
-- [ ] Обновлены `README.md` / `docs/` / `CHANGELOG.md`, если нужно
+- [ ] Branch is based on current `main`
+- [ ] `python -m compileall -q skaycleartux SkayClearTux.py`
+- [ ] `python -m pytest -q`
+- [ ] `QT_QPA_PLATFORM=offscreen python tools/smoke_test.py`
+- [ ] `python -m ruff check skaycleartux tests tools`
+- [ ] System calls go through `skaycleartux/backends/`, no `shell=True`
+- [ ] Docs updated if behavior changed
 
-## Скриншоты (для изменений интерфейса)
+## Screenshots (for UI changes)
 
-<!-- Перетащите изображения сюда -->
+<!-- Drag images here -->

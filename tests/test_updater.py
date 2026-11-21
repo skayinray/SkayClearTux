@@ -1,23 +1,52 @@
-"""Юнит-тесты дистанционных обновлений (``skaycleartux.updater``).
+"""Tests for signed automatic updates (skaycleartux.updater).
 
-Сеть не используется: ``urllib.request.urlopen`` и ``subprocess.Popen``
-подменяются. Отдельно проверяем враждебный ввод — мусорный JSON, пустой
-адрес и несовпадение контрольной суммы.
+Network calls are replaced with fakes. A throwaway Ed25519 key is used for
+fixtures; the production public key stays in skaycleartux.release_key.
 """
 from __future__ import annotations
-import sys
 
+import base64
 import hashlib
 import json
 from pathlib import Path
+import sys
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import pytest
 
-from skaycleartux import updater
+from skaycleartux import release_key, updater
+
+_TEST_KEY = Ed25519PrivateKey.generate()
+_GOOD_SHA = "a" * 64
+
+
+@pytest.fixture(autouse=True)
+def use_test_key(monkeypatch):
+    monkeypatch.setattr(release_key, "_PUBLIC_KEY", _TEST_KEY.public_key())
+
+
+def signed(payload: dict) -> dict:
+    """Return a manifest signed with the throwaway test key."""
+    body = {key: value for key, value in payload.items() if key != "signature"}
+    signature = _TEST_KEY.sign(release_key.canonical_manifest_bytes(body))
+    body["signature"] = base64.b64encode(signature).decode("ascii")
+    return body
+
+
+def valid_payload(**overrides) -> dict:
+    payload = {
+        "version": "9.9.9",
+        "url": "https://x/y.AppImage",
+        "sha256": _GOOD_SHA,
+        "notes": "test release",
+        "published": "2026-11-18",
+    }
+    payload.update(overrides)
+    return payload
 
 
 # --------------------------------------------------------------------------- #
-#  Версии
+#  Versions
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("text,expected", [
     ("1.3.0", (1, 3, 0)),
@@ -42,10 +71,10 @@ def test_is_newer(remote, current, expected):
 
 
 # --------------------------------------------------------------------------- #
-#  Манифест
+#  Manifest and signature
 # --------------------------------------------------------------------------- #
 class FakeResponse:
-    """Минимальная замена ответа urlopen (контекстный менеджер + read)."""
+    """Minimal urlopen response: context manager + read + geturl."""
 
     def __init__(self, body: bytes, content_length: int | None = None,
                  final_url: str | None = None):
@@ -72,12 +101,48 @@ class FakeResponse:
         return data
 
 
+def fake_manifest(monkeypatch, payload: dict):
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(json.dumps(payload).encode()),
+    )
+
+
 def test_fetch_manifest_ok(monkeypatch):
-    payload = {"version": "9.9.9", "url": "https://x/y"}
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(
-                            json.dumps(payload).encode()))
-    assert updater.fetch_manifest("https://x/manifest.json") == payload
+    fake_manifest(monkeypatch, signed(valid_payload()))
+    assert updater.fetch_manifest("https://x/manifest.json")["version"] == "9.9.9"
+
+
+def test_fetch_manifest_rejects_unsigned(monkeypatch):
+    fake_manifest(monkeypatch, valid_payload())
+    with pytest.raises(ValueError, match="подписан"):
+        updater.fetch_manifest("https://x/m.json")
+
+
+def test_fetch_manifest_rejects_bad_signature(monkeypatch):
+    payload = signed(valid_payload())
+    payload["notes"] = "tampered release notes"
+    fake_manifest(monkeypatch, payload)
+    with pytest.raises(ValueError, match="недействительна"):
+        updater.fetch_manifest("https://x/m.json")
+
+
+def test_fetch_manifest_rejects_malformed_signature(monkeypatch):
+    payload = valid_payload(signature="not-base64!!")
+    fake_manifest(monkeypatch, payload)
+    with pytest.raises(ValueError, match="формат подписи"):
+        updater.fetch_manifest("https://x/m.json")
+
+
+@pytest.mark.parametrize("overrides", [
+    {"sha256": ""},
+    {"sha256": "deadbeef"},
+    {"url": ""},
+])
+def test_fetch_manifest_requires_signed_integrity_fields(monkeypatch, overrides):
+    fake_manifest(monkeypatch, signed(valid_payload(**overrides)))
+    with pytest.raises(ValueError):
+        updater.fetch_manifest("https://x/m.json")
 
 
 @pytest.mark.parametrize("url", ["", "   "])
@@ -87,10 +152,10 @@ def test_fetch_manifest_empty_url(url):
 
 
 @pytest.mark.parametrize("url", [
-    "http://x/manifest.json",       # небезопасная схема
+    "http://x/manifest.json",
     "ftp://x/manifest.json",
     "file:///etc/passwd",
-    "https://",                     # нет хоста
+    "https://",
 ])
 def test_fetch_manifest_rejects_unsafe_url(url):
     with pytest.raises(ValueError):
@@ -98,37 +163,49 @@ def test_fetch_manifest_rejects_unsafe_url(url):
 
 
 def test_fetch_manifest_rejects_redirect_to_http(monkeypatch):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(
-                            b'{"version": "9.9.9"}',
-                            final_url="http://evil/manifest.json"))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(
+            b"anything", final_url="http://evil/manifest.json"),
+    )
     with pytest.raises(ValueError, match="HTTPS"):
         updater.fetch_manifest("https://x/m.json")
 
 
 def test_fetch_manifest_garbage_json(monkeypatch):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(b"{not json"))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(b"{not json"),
+    )
     with pytest.raises(json.JSONDecodeError):
         updater.fetch_manifest("https://x/m.json")
 
 
 def test_fetch_manifest_not_dict(monkeypatch):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(b"[1, 2, 3]"))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(b"[1, 2, 3]"),
+    )
     with pytest.raises(ValueError):
         updater.fetch_manifest("https://x/m.json")
 
 
 def test_fetch_manifest_without_version(monkeypatch):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(b'{"url": "x"}'))
+    fake_manifest(monkeypatch, {"url": "x"})
     with pytest.raises(ValueError):
         updater.fetch_manifest("https://x/m.json")
 
 
+def test_no_unverified_ssl_context(monkeypatch):
+    def forbidden():
+        raise AssertionError("TLS verification must not be disabled")
+
+    monkeypatch.setattr(updater.ssl, "_create_unverified_context", forbidden)
+    assert updater._ssl_contexts("https://github.com/x")
+
+
 # --------------------------------------------------------------------------- #
-#  Путь к текущему AppImage
+#  Current AppImage path
 # --------------------------------------------------------------------------- #
 def test_appimage_path_set(monkeypatch, tmp_path):
     appimage = tmp_path / "App.AppImage"
@@ -145,13 +222,15 @@ def test_appimage_path_missing(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-#  Скачивание
+#  Download
 # --------------------------------------------------------------------------- #
 def test_download_ok_and_checksum(monkeypatch, tmp_path):
     body = b"new appimage payload"
     digest = hashlib.sha256(body).hexdigest()
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(body, len(body)))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(body, len(body)),
+    )
     seen = []
     dest = tmp_path / "dl.AppImage"
     updater.download("https://x/a", dest, expected_sha256=digest,
@@ -161,20 +240,24 @@ def test_download_ok_and_checksum(monkeypatch, tmp_path):
 
 
 def test_download_bad_checksum_removes_file(monkeypatch, tmp_path):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(b"tampered"))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(b"tampered"),
+    )
     dest = tmp_path / "dl.AppImage"
     with pytest.raises(ValueError, match="контрольная сумма"):
-        updater.download("https://x/a", dest, expected_sha256="deadbeef")
+        updater.download("https://x/a", dest, expected_sha256="deadbeef" * 8)
     assert not dest.exists()
 
 
-def test_download_without_checksum(monkeypatch, tmp_path):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(b"data"))
-    dest = tmp_path / "dl.AppImage"
-    updater.download("https://x/a", dest)
-    assert dest.read_bytes() == b"data"
+@pytest.mark.parametrize("checksum", ["", "deadbeef", "z" * 64])
+def test_download_requires_valid_sha256(monkeypatch, tmp_path, checksum):
+    def no_network(*args, **kwargs):
+        raise AssertionError("network must not be used without a valid checksum")
+
+    monkeypatch.setattr(updater.urllib.request, "urlopen", no_network)
+    with pytest.raises(ValueError, match="SHA-256"):
+        updater.download("https://x/a", tmp_path / "dl.AppImage", checksum)
 
 
 @pytest.mark.parametrize("url", [
@@ -182,19 +265,20 @@ def test_download_without_checksum(monkeypatch, tmp_path):
 ])
 def test_download_rejects_unsafe_url(url, tmp_path):
     with pytest.raises(ValueError):
-        updater.download(url, tmp_path / "dl.AppImage")
+        updater.download(url, tmp_path / "dl.AppImage", _GOOD_SHA)
 
 
 def test_download_rejects_redirect_to_http(monkeypatch, tmp_path):
-    monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=0: FakeResponse(
-                            b"data", final_url="http://evil/a"))
+    monkeypatch.setattr(
+        updater.urllib.request, "urlopen",
+        lambda req, timeout=0: FakeResponse(b"data", final_url="http://evil/a"),
+    )
     with pytest.raises(ValueError, match="HTTPS"):
-        updater.download("https://x/a", tmp_path / "dl.AppImage")
+        updater.download("https://x/a", tmp_path / "dl.AppImage", _GOOD_SHA)
 
 
 # --------------------------------------------------------------------------- #
-#  Безопасность имён файлов (path traversal)
+#  Filenames and installation
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("name,expected", [
     ("SkayClearTux-1.3.0.AppImage", "SkayClearTux-1.3.0.AppImage"),
@@ -226,10 +310,6 @@ def test_install_appimage_rejects_directory(tmp_path):
         updater.install_appimage(downloaded, str(tmp_path))
 
 
-
-# --------------------------------------------------------------------------- #
-#  Установка
-# --------------------------------------------------------------------------- #
 @pytest.mark.skipif(sys.platform == "win32", reason="No AppImage on Windows")
 def test_install_appimage_replaces_target(tmp_path):
     downloaded = tmp_path / "new.AppImage"
@@ -238,7 +318,7 @@ def test_install_appimage_replaces_target(tmp_path):
     target.write_bytes(b"old")
     updater.install_appimage(downloaded, str(target))
     assert target.read_bytes() == b"new"
-    assert target.stat().st_mode & 0o111  # исполняемый
+    assert target.stat().st_mode & 0o111
 
 
 def test_install_appimage_cross_device_fallback(monkeypatch, tmp_path):
@@ -262,7 +342,7 @@ def test_install_appimage_cross_device_fallback(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-#  Перезапуск и временный путь
+#  Restart and temp paths
 # --------------------------------------------------------------------------- #
 def test_restart_popen(monkeypatch, tmp_path):
     captured = {}
@@ -283,7 +363,6 @@ def test_temp_download_path():
     path = updater.temp_download_path("SkayClearTux-1.3.0-x86_64.AppImage")
     assert isinstance(path, Path)
     assert path.suffix == ".AppImage"
-    assert path.exists()
     path.unlink()
 
 

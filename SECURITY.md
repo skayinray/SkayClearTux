@@ -1,74 +1,20 @@
-# Политика безопасности
+# Security policy
 
-## Поддерживаемые версии
+Supported versions: 1.5.x. Older releases do not receive fixes.
 
-Исправления безопасности выходят для последнего релиза и ветки `main`.
+## Reporting
 
-| Версия | Поддержка |
-|--------|:---------:|
-| 1.3.x | ✅ |
-| 1.2.x | ⚠️ только критичное |
-| < 1.2 | ❌ |
+Open a private report with "Report a vulnerability" in the repository Security tab, or email `officialidea78@gmail.com`. Include the version, OS and a short reproducer. Please do not open public issues for security bugs.
 
-## Как сообщить об уязвимости
+## Update verification
 
-**Не создавайте публичный Issue.** Напишите приватно:
+Release manifests (`latest.json`) are signed with Ed25519. The public key is in `skaycleartux/release_key.py`; the private key exists only in the GitHub Actions secret `RELEASE_SIGNING_KEY`. The updater verifies the signature over canonical JSON before using any field, requires a 64-character SHA-256 digest, and enforces HTTPS including after redirects. TLS certificate verification is never skipped.
 
-- Telegram: **[t.me/imneedasleep](https://t.me/imneedasleep)** — основной канал;
-- либо через GitHub Security Advisories: вкладка **Security → Report a
-  vulnerability** в репозитории.
+Every release artifact also has a `.sig` file (base64 Ed25519 signature over the raw file). Verify one locally with:
 
-В сообщении укажите: версию SkayClearTux, ОС, суть проблемы, шаги
-воспроизведения и возможное влияние. Мы подтвердим получение в течение
-нескольких дней и согласуем раскрытие после выпуска исправления.
+```sh
+python tools/sign_update.py verify-file SkayClearTux-1.5.3.2-x86_64.AppImage SkayClearTux-1.5.3.2-x86_64.AppImage.sig
+python tools/sign_update.py verify-manifest latest.json
+```
 
-## Модель угроз
-
-SkayClearTux — настольное приложение, которое выполняет системные команды от
-имени пользователя и (по запросу) с правами администратора. Ниже — что мы
-защищаем и как.
-
-### Что считаем доверенным
-
-- Локальная установка программы и её файлы.
-- Адрес манифеста обновлений, заданный пользователем в настройках.
-- Системные утилиты ОС (`pacman`, `apt`, `systemctl`, `launchctl`, `winget`,
-  `netsh` и т. п.), вызываемые по фиксированным путям.
-
-### Что считаем недоверенным
-
-- Содержимое удалённого манифеста обновлений и файл обновления.
-- Ввод пользователя в полях интерфейса (поиск, пути, имена пакетов, имена
-  модулей, параметры твиков).
-- Вывод внешних утилит, который мы разбираем (может быть произвольным).
-
-### Основные риски и меры
-
-| Риск | Мера |
-|------|------|
-| Подмена обновления по сети (MITM) | Обновления принимаются **только по HTTPS**; после редиректов проверяется, что итоговый адрес остался `https://` |
-| Повреждённый или подменённый файл обновления | Обязательная проверка **SHA-256** из манифеста; при несовпадении файл удаляется, установка прерывается |
-| Запись обновления вне целевого каталога (path traversal) | Имя файла санитизируется (`safe_filename`): отбрасываются каталоги и `..`; временный файл создаётся в системном каталоге временных файлов |
-| Инъекция команд через `shell=True` | Команды запускаются **списком аргументов** без `shell=True`; ввод пользователя не подставляется в строку команды |
-| Зависание на внешней команде | У всех вызовов есть **таймаут**; по истечении процесс завершается |
-| Повышение прав без спроса | Привилегированные действия запрашивают пароль средствами ОС (`pkexec`/`sudo`, `osascript`, UAC); без пароля команда не выполняется |
-| Разрушительные операции (удаление файлов, служб, модулей) | Действия ограничены известными безопасными каталогами/именами; перед необратимыми шагами интерфейс запрашивает подтверждение |
-| Утечка секретов в логи | В логи не пишутся пароли и токены; логируются только сообщения об ошибках бэкендов и трассировки |
-
-### Явно вне модели угроз
-
-- Полностью скомпрометированная локальная учётная запись или ОС.
-- Вредоносные расширения/плагины сторонних приложений.
-- Физический доступ к машине.
-
-## Логи
-
-Ошибки бэкендов пишутся в файл лога в стандартном каталоге ОС (с ротацией):
-
-| ОС | Путь |
-|----|------|
-| Linux | `~/.local/state/SkayClearTux/skaycleartux.log` (`$XDG_STATE_HOME`) |
-| macOS | `~/Library/Logs/SkayClearTux/skaycleartux.log` |
-| Windows | `%LOCALAPPDATA%\SkayClearTux\Logs\skaycleartux.log` |
-
-Перед публикацией лога в Issue проверьте, нет ли в нём личных путей и данных.
+Windows Authenticode and macOS notarization require commercial certificates and are not currently configured. Unsigned platform packages are marked as such in the release notes. Do not treat them as a trust signal beyond the release signature.

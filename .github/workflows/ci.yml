@@ -59,17 +59,25 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: >
-          python -m pytest -k 'not test_ui and not test_interface' --ignore=tests/test_ui_main_window.py -k 'not test_ui and not test_interface' --ignore=tests/test_main_window.py -q
+          python -m pytest -q
+          -k 'not test_ui and not test_interface'
+          --ignore=tests/test_ui_main_window.py
+          --ignore=tests/test_main_window.py
           --cov=skaycleartux.backends
           --cov=skaycleartux.cleaner
           --cov-report=term-missing
           --cov-report=xml
+          --cov-fail-under=60
 
       - name: Тесты (macOS / Windows)
         if: matrix.os != 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -k 'not test_ui and not test_interface' --ignore=tests/test_ui_main_window.py -k 'not test_ui and not test_interface' --ignore=tests/test_main_window.py -q
+        run: >
+          python -m pytest -q
+          -k 'not test_ui and not test_interface'
+          --ignore=tests/test_ui_main_window.py
+          --ignore=tests/test_main_window.py
 
       - name: Загрузить отчёт покрытия
         if: matrix.os == 'ubuntu-latest'
@@ -83,4 +91,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           PYTHONIOENCODING: utf-8
-        run: python tools/smoke_test.py || true
+        run: python tools/smoke_test.py

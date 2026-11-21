@@ -1,7 +1,8 @@
 {
   "version": "1.5.3.2",
   "url": "https://github.com/skayinray/SkayClearTux/releases/download/v1.5.3.2/SkayClearTux-1.5.3.2-x86_64.AppImage",
-  "sha256": "ВСТАВЬТЕ_СЮДА_sha256_ФАЙЛА",
-  "notes": "Что нового: описание изменений этой версии.",
-  "published": "2026-11-18"
+  "sha256": "64 hex characters from sha256sum",
+  "notes": "Short release notes",
+  "published": "2026-11-18",
+  "signature": "base64 Ed25519 signature over all other fields"
 }

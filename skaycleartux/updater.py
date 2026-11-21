@@ -1,22 +1,20 @@
-"""Дистанционные обновления SkayClearTux.
+"""Signed automatic updates for SkayClearTux.
 
-Программа периодически читает JSON-манифест по URL вида:
+The updater reads a JSON manifest like this::
 
     {
-      "version": "1.4.0",
-      "url": "https://.../SkayClearTux-1.4.0-x86_64.AppImage",
-      "sha256": "....",           // необязательно, но рекомендуется
-      "notes": "Что нового...",
-      "published": "2026-11-16"
+      "version": "1.5.3.2",
+      "url": "https://.../SkayClearTux-1.5.3.2-x86_64.AppImage",
+      "sha256": "64 hex characters",
+      "notes": "Release notes",
+      "published": "2026-11-18",
+      "signature": "base64 Ed25519 signature"
     }
 
-Если версия в манифесте новее текущей — показываем уведомление, а по нажатию
-кнопки «Обновить» скачиваем новый AppImage, проверяем контрольную сумму,
-подменяем файл и перезапускаем программу.
-
-Всё, что нужно, — разместить манифест и файл на любом статическом хостинге
-(GitHub Releases, Gist, свой сервер). Готовый CI для этого лежит в
-.github/workflows/.
+The signature covers every other field in canonical JSON form and is verified
+against the public key shipped in ``skaycleartux.release_key``. An unsigned or
+tampered manifest is rejected. Downloads must be HTTPS and must match the
+signed SHA-256 digest.
 """
 from __future__ import annotations
 
@@ -33,6 +31,7 @@ import urllib.request
 from pathlib import Path
 
 from . import __version__
+from .release_key import verify_manifest
 
 USER_AGENT = f"SkayClearTux/{__version__}"
 
@@ -107,47 +106,37 @@ def safe_filename(name: str) -> str:
 
 
 def _ssl_contexts(url: str):
-    """Набор SSL-контекстов для надёжной работы в собранных приложениях.
+    """Verified SSL contexts only.
 
-    В некоторых окружениях (AppImage/сборки без системных CA) проверка
-    сертификата может падать с CERTIFICATE_VERIFY_FAILED. Пробуем стандартный
-    контекст, затем certifi/известные пути к CA, и только как последний
-    резерв — нестрогий контекст для доверенных хостов GitHub (чтобы
-    автообновление не ломалось из-за конфигурации окружения).
+    Bundled builds may miss system CA certificates, so known CA bundles are
+    tried in order. Certificate verification is never disabled: a failed TLS
+    check must fail the update instead of silently accepting a MITM.
     """
-    contexts = []
-    try:
-        contexts.append(ssl.create_default_context())
-    except Exception:  # noqa: BLE001
-        pass
+    del url  # kept for compatibility with existing callers
+    paths: list[str | None] = [None]
     try:
         import certifi  # type: ignore
-        contexts.append(ssl.create_default_context(cafile=certifi.where()))
+        paths.append(certifi.where())
     except Exception:  # noqa: BLE001
         pass
-    for cafile in (
+    paths.extend([
         "/etc/ssl/certs/ca-certificates.crt",
         "/etc/pki/tls/certs/ca-bundle.crt",
         "/etc/ssl/cert.pem",
         "/etc/ssl/certs/ca-bundle.crt",
         "/usr/local/share/certs/ca-root-nss.crt",
-    ):
+    ])
+    contexts = []
+    for cafile in paths:
         try:
-            if os.path.exists(cafile):
-                contexts.append(ssl.create_default_context(cafile=cafile))
+            contexts.append(
+                ssl.create_default_context() if cafile is None
+                else ssl.create_default_context(cafile=cafile)
+            )
         except Exception:  # noqa: BLE001
-            pass
-    host = (urllib.parse.urlsplit(url).hostname or "").lower()
-    trusted = host in ("github.com", "api.github.com", "objects.githubusercontent.com") \
-        or host.endswith(".github.com") or host.endswith(".githubusercontent.com")
-    if trusted:
-        try:
-            contexts.append(ssl._create_unverified_context())
-        except Exception:  # noqa: BLE001
-            pass
-    # гарантируем хотя бы одну попытку
+            continue
     if not contexts:
-        contexts.append(None)
+        raise RuntimeError("не удалось создать SSL-контекст с проверкой сертификата")
     return contexts
 
 
@@ -226,6 +215,15 @@ def fetch_manifest(url: str, timeout: float = 12.0) -> dict:
     data = json.loads(raw)
     if not isinstance(data, dict) or "version" not in data:
         raise ValueError("манифест повреждён: нет поля version")
+    verify_manifest(data)
+    required = ("url", "sha256")
+    missing = [field for field in required if not str(data.get(field) or "").strip()]
+    if missing:
+        raise ValueError(f"манифест обновлений повреждён: нет полей {', '.join(missing)}")
+    sha = str(data["sha256"]).strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha):
+        raise ValueError("неверный формат sha256 в манифесте обновлений")
+    data["sha256"] = sha
     return data
 
 
@@ -238,14 +236,18 @@ def appimage_path() -> str | None:
     return None
 
 
-def download(url: str, dest: Path, expected_sha256: str = "",
+def download(url: str, dest: Path, expected_sha256: str,
              progress=None) -> Path:
-    """Скачивает файл в dest, при необходимости проверяет sha256.
+    """Download an update and verify its signed SHA-256 digest.
 
-    Принимает только HTTPS-адреса и убеждается, что и после редиректов
-    соединение осталось защищённым.
+    Only HTTPS URLs are accepted, including after redirects. The checksum is
+    mandatory: it comes from the signed manifest and protects the payload.
     """
     url = _validate_url(url, what="адрес файла обновления")
+    sha = str(expected_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha):
+        raise ValueError(
+            "для обновления нужна контрольная сумма SHA-256 из подписанного манифеста")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     hasher = hashlib.sha256()
     with _urlopen(req, timeout=60) as resp, open(dest, "wb") as fh:
@@ -262,15 +264,14 @@ def download(url: str, dest: Path, expected_sha256: str = "",
             done += len(chunk)
             if progress is not None:
                 progress(done, total)
-    if expected_sha256:
-        actual = hasher.hexdigest().lower()
-        if actual != expected_sha256.strip().lower():
-            try:
-                dest.unlink()
-            except OSError:
-                pass
-            raise ValueError(
-                "контрольная сумма не совпала — файл повреждён или подменён")
+    actual = hasher.hexdigest().lower()
+    if actual != sha:
+        try:
+            dest.unlink()
+        except OSError:
+            pass
+        raise ValueError(
+            "контрольная сумма не совпала — файл повреждён или подменён")
     return dest
 
 

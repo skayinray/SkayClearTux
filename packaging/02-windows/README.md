@@ -1,64 +1,33 @@
-# 02 — Windows
+# Windows build
 
-Тот же Python-код собирается в обычное приложение `SkayClearTux.exe`.
-Нужен Windows-компьютер с Python 3.11+.
+Requires Windows 10/11 and Python 3.11+. The release asset is `SkayClearTux-windows.zip`; unzip it and run `SkayClearTux.exe`.
 
-**Готовая сборка** публикуется в релизах как `SkayClearTux-windows.zip`.
-Распакуйте архив и запустите `SkayClearTux.exe`.
+System pages use native tools: `winget`/`choco`, Windows services, `ipconfig`/`netstat`, WMI, Task Scheduler and Event Log. Linux-only pages are shown as unavailable.
 
-> Все системные разделы на Windows работают через родные средства:
-> `winget`/`choco` (пакеты и обновления), службы Windows, `ipconfig`/`netstat`
-> (сеть и порты), WMI (железо, температура, батарея), Планировщик заданий и
-> Журнал событий. Отдельные функции (например, модули ядра) недоступны и
-> аккуратно сообщают об этом.
+## Build
 
-## Быстрая сборка
+```bat
+packaging\02-windows\build.bat
+```
 
-1. Скопируйте всю папку проекта `SkayClearTux` на Windows-машину.
-2. Установите Python 3.11+ (python.org), отметив **Add python.exe to PATH**.
-3. Запустите скрипт сборки:
+or:
 
-   ```bat
-   packaging\02-windows\build.bat
-   ```
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\02-windows\build.ps1
+```
 
-   или через PowerShell:
+The script creates `.venv-win`, installs PySide6 Essentials, PyInstaller and Pillow, generates `tux.ico` and builds the onedir bundle from `SkayClearTux.spec`. Zip the whole `dist\SkayClearTux` directory.
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File packaging\02-windows\build.ps1
-   ```
-
-4. Результат: `dist\SkayClearTux\SkayClearTux.exe`.
-   Папку `dist\SkayClearTux` целиком архивируйте в `.zip` — это и есть сборка.
-
-## Что делает скрипт
-
-* создаёт окружение `.venv-win`;
-* ставит `PySide6`, `pyinstaller`, `pillow`;
-* делает `tux.ico` из `tux.png`;
-* собирает программу по `SkayClearTux.spec` (onedir — быстрый запуск).
-
-## Опционально: один файл .exe
-
-В `SkayClearTux.spec` замените блок `COLLECT` на `onefile`, либо соберите так:
+For a single-file build, replace the `COLLECT` block in the spec, or run:
 
 ```bat
 pyinstaller --noconfirm --clean --onefile --windowed ^
-    --name SkayClearTux ^
-    --add-data "skaycleartux/assets;skaycleartux/assets" ^
-    --icon skaycleartux/assets/tux.ico ^
-    --exclude-module tkinter SkayClearTux.py
+  --name SkayClearTux ^
+  --add-data "skaycleartux/assets;skaycleartux/assets" ^
+  --icon skaycleartux/assets/tux.ico ^
+  --exclude-module tkinter SkayClearTux.py
 ```
 
-> `--add-data` в Windows использует разделитель `;` (в Linux — `:`).
+Windows uses `;` as the `--add-data` separator. An optional Inno Setup script can wrap `dist\SkayClearTux` into an installer.
 
-## Опционально: установщик
-
-Готовый `dist\SkayClearTux` можно завернуть в установщик
-[Inno Setup](https://jrsoftware.org/isinfo.php) — 10 строк в `.iss`-скрипте.
-
-## Обновления
-
-Файлы `latest.json` и новые сборки можно публиковать на GitHub Releases —
-см. общий [`README.md`](../README.md) и workflow
-[`.github/workflows/build.yml`](../../.github/workflows/build.yml).
+Authenticode signing needs a commercial certificate and is not configured. Release integrity is covered by the Ed25519 `.sig` files described in `SECURITY.md`.

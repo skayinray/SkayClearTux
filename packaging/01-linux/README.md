@@ -1,72 +1,39 @@
-# 01 — Linux (AppImage, .deb, .rpm)
+# Linux packages
 
-SkayClearTux собирается в один переносимый файл
-`SkayClearTux-1.5.3.2-x86_64.AppImage`, а также в пакеты `.deb` и `.rpm`.
-Работает на большинстве современных дистрибутивов (glibc 2.35+): Arch,
-Ubuntu 22.04+, Fedora, Debian 12 и др.
+Builds an AppImage, `.deb` and `.rpm` from the same PyInstaller bundle. Tested on glibc 2.35+ distributions.
 
-Менеджер пакетов определяется автоматически: **pacman, apt, dnf, zypper, apk**.
+## Use a release
 
-## Установка из готовой сборки
-
-Положите AppImage рядом с `install.sh` и запустите:
-
-```bash
-chmod +x install.sh
-./install.sh
+```sh
+chmod +x SkayClearTux-*-x86_64.AppImage
+./SkayClearTux-*-x86_64.AppImage
 ```
 
-Скрипт положит AppImage в `~/.local/bin`, иконку — в `~/.local/share/icons`
-и создаст пункт в меню приложений. После этого программа запускается из меню
-или командой `SkayClearTux.AppImage`.
+Without FUSE:
 
-## Запуск без установки
-
-```bash
-chmod +x SkayClearTux-1.5.3.2-x86_64.AppImage
-./SkayClearTux-1.5.3.2-x86_64.AppImage
+```sh
+APPIMAGE_EXTRACT_AND_RUN=1 ./SkayClearTux-*-x86_64.AppImage
 ```
 
-Если FUSE не установлен (частая ситуация в контейнерах):
+`install.sh` puts the AppImage in `~/.local/bin`, installs the icon and adds a desktop entry.
 
-```bash
-APPIMAGE_EXTRACT_AND_RUN=1 ./SkayClearTux-1.5.3.2-x86_64.AppImage
+Packages:
+
+```sh
+sudo apt install ./SkayClearTux-*-amd64.deb
+sudo dnf install ./SkayClearTux-*-x86_64.rpm
 ```
 
-## Установка из пакетов .deb / .rpm
+## Build
 
-```bash
-# Debian, Ubuntu, Mint и производные:
-sudo apt install ./SkayClearTux-1.5.3.2-amd64.deb
-
-# Fedora, RHEL, openSUSE и производные:
-sudo dnf install ./SkayClearTux-1.5.3.2-x86_64.rpm
+```sh
+python -m pip install -e ".[build]"
+pyinstaller --noconfirm --clean --windowed --name SkayClearTux \
+  --add-data "skaycleartux/assets:skaycleartux/assets" \
+  --icon skaycleartux/assets/tux.png --exclude-module tkinter SkayClearTux.py
+VERSION=1.5.3.2 bash packaging/01-linux/make_appimage.sh
+VERSION=1.5.3.2 bash packaging/01-linux/make_deb.sh    # needs dpkg-deb
+VERSION=1.5.3.2 bash packaging/01-linux/make_rpm.sh    # needs rpmbuild
 ```
 
-После установки программа появляется в меню приложений и запускается командой
-`skaycleartux`.
-
-## Что внутри
-
-* Python 3 + PySide6 (Qt 6), собран в один AppImage через PyInstaller.
-* Ничего доустанавливать не нужно — все библиотеки внутри.
-
-## Сборка с нуля
-
-```bash
-cd /path/to/SkayClearTux
-python -m venv .venv && . .venv/bin/activate
-pip install PySide6 pyinstaller
-pyinstaller --noconfirm --clean --windowed \
-    --name SkayClearTux \
-    --add-data "skaycleartux/assets:skaycleartux/assets" \
-    --icon skaycleartux/assets/tux.png \
-    --exclude-module tkinter SkayClearTux.py
-VERSION=1.5.3.2 bash packaging/01-linux/make_appimage.sh   # AppImage
-VERSION=1.5.3.2 bash packaging/01-linux/make_deb.sh        # .deb (нужен dpkg-deb)
-VERSION=1.5.3.2 bash packaging/01-linux/make_rpm.sh        # .rpm (нужен rpmbuild)
-```
-
-`make_appimage.sh` сам скачает `appimagetool`, если его нет, и соберёт
-`build/SkayClearTux-1.5.3.2-x86_64.AppImage`. Скрипты `make_deb.sh` и
-`make_rpm.sh` используют общий `stage_tree.sh`. Тот же сценарий использует CI.
+`make_deb.sh` and `make_rpm.sh` share `stage_tree.sh`. The release workflow uses the same scripts.

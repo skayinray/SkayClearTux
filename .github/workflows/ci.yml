@@ -9,6 +9,7 @@ jobs:
   test:
     name: ${{ matrix.os }} · Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -22,39 +23,39 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
 
-      - name: Системные зависимости (Linux)
+      - name: Linux system dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
 
-      - name: Установка зависимостей Python (Все ОС)
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Линтер (ruff)
+      - name: Lint (ruff)
         run: python -m ruff check skaycleartux tests tools
 
-      - name: Формат (black) — мягкий режим
+      - name: Format check (black, advisory)
         continue-on-error: true
         run: python -m black --check skaycleartux tests tools
 
-      - name: Типы (mypy) — мягкий режим
+      - name: Type check (mypy, advisory)
         continue-on-error: true
         run: python -m mypy
 
-      - name: Проверка синтаксиса
+      - name: Compile sources
         run: python -m compileall -q skaycleartux SkayClearTux.py tools tests
 
-      - name: Тест менеджеров пакетов Linux
+      - name: Linux package manager check
         if: matrix.os == 'ubuntu-latest'
         run: python tools/pkg_check.py
 
-      - name: Импорт бэкенда текущей ОС
+      - name: Import current OS backend
         run: python -c "from skaycleartux.backends import get_backend; b=get_backend(); print(b.name, b.display)"
 
-      - name: Тесты (Linux, с покрытием)
+      - name: Tests with coverage (Linux)
         if: matrix.os == 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
@@ -69,7 +70,7 @@ jobs:
           --cov-report=xml
           --cov-fail-under=60
 
-      - name: Тесты (macOS / Windows)
+      - name: Tests (macOS and Windows)
         if: matrix.os != 'ubuntu-latest'
         env:
           QT_QPA_PLATFORM: offscreen
@@ -79,7 +80,7 @@ jobs:
           --ignore=tests/test_ui_main_window.py
           --ignore=tests/test_main_window.py
 
-      - name: Загрузить отчёт покрытия
+      - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
@@ -87,7 +88,10 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
 
-      - name: Дымовой тест интерфейса (offscreen)
+      - name: Offscreen UI smoke test
+        # Qt's offscreen plugin hangs during teardown on macOS runners.
+        if: matrix.os != 'macos-latest'
+        timeout-minutes: 2
         env:
           QT_QPA_PLATFORM: offscreen
           PYTHONIOENCODING: utf-8

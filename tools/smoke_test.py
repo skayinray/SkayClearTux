@@ -1,26 +1,23 @@
-"""Дымовой тест SkayClearTux (запускается в CI и локально).
+"""Offscreen UI smoke test for SkayClearTux.
 
-Поднимает интерфейс в offscreen-режиме, обходит все страницы, проверяет, что
-бэкенд текущей ОС отвечает, и ищет символы, которые Qt рисует пустыми
-квадратами (эмодзи и редкие стрелки/геометрические знаки).
+Opens the interface without a display, visits every page, checks that the
+current OS backend responds, and reports glyphs that Qt may render as boxes.
 
-Запуск:
+Run with:
 
     QT_QPA_PLATFORM=offscreen python tools/smoke_test.py
 """
 from __future__ import annotations
 
 import os
-import sys; os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PySide6.QtWidgets import (QApplication, QTableWidget)
+from PySide6.QtWidgets import QApplication, QTableWidget
 
 from skaycleartux import cleaner  # noqa: E402
-import os
-import sys
 from skaycleartux import system_tools as st  # noqa: E402
 from skaycleartux.backends import common  # noqa: E402
 from skaycleartux.main_window import NAV, MainWindow  # noqa: E402
@@ -129,9 +126,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # os._exit обходит падение Qt при завершении в offscreen-режиме,
-    # из-за которого процесс мог завершаться сигналом SIGABRT.
-    _code = main()
+    code = main()
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(_code)
+    if os.name == "nt":
+        # Windows returns the right status from a normal exit. os._exit(0)
+        # has produced exit code 1 on GitHub-hosted Windows runners.
+        raise SystemExit(code)
+    # On Linux, Qt's offscreen plugin can abort during normal teardown.
+    os._exit(code)
